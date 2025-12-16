@@ -47,7 +47,7 @@ export const VOICES = [
 ];
 
 export const TONES = [
-  'Default (Chill)',
+  'Default',
   'Professional',
   'Cynical',
   'Efficient',

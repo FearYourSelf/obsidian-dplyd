@@ -10,7 +10,7 @@ export const defaultSettings: UserSettings = {
   aboutUser: '',
   customInstructions: '',
   voice: 'Zephyr',
-  tone: 'Default (Chill)',
+  tone: 'Default',
   languageInterface: 'en',
   languageModel: 'Auto-Detect',
   allowTraining: false

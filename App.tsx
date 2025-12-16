@@ -101,11 +101,14 @@ const App: React.FC = () => {
     if (scrollContainerRef.current) {
         if (isStreaming) {
             // Force instant scroll without animation during streaming
+            // 'overflowAnchor: none' is the MAGIC FIX for drifting content in modern browsers
             scrollContainerRef.current.style.scrollBehavior = 'auto';
+            scrollContainerRef.current.style.overflowAnchor = 'none'; 
             scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
         } else {
              // Re-enable smooth scrolling for manual user actions or new messages
              scrollContainerRef.current.style.scrollBehavior = 'smooth';
+             scrollContainerRef.current.style.overflowAnchor = 'auto'; 
              
              // Check if we are close to bottom or if it's a fresh message
              const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;

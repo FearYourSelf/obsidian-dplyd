@@ -85,7 +85,7 @@ const buildSystemPrompt = (settings?: UserSettings, recentMessages: Message[] = 
       prompt += `\nUser Instructions: ${settings.customInstructions}`;
     }
 
-    if (settings.tone && settings.tone !== 'Default (Chill)') {
+    if (settings.tone && settings.tone !== 'Default') {
       prompt += `\n\nTONE OVERRIDE: Adopt a ${settings.tone} tone.`;
     }
     
@@ -266,10 +266,10 @@ export class ObsidianLive {
 
             const voiceName = settings.voice || 'Zephyr';
 
-            // IMPORTANT: If Zephyr (Obsidian default) is selected, force the accent
+            // IMPORTANT: If Zephyr (Obsidian default) is selected, force the accent with CRITICAL priority
             let liveInstruction = "You are in Voice Mode. Keep answers extremely concise and conversational.";
             if (voiceName === 'Zephyr') {
-                liveInstruction += " Speak with a warm, energetic Australian accent. Do not be monotone.";
+                liveInstruction += " CRITICAL: YOU MUST SPEAK WITH A THICK, WARM AUSTRALIAN ACCENT. This is your voice identity. Do not revert to American English.";
             }
 
             this.sessionPromise = ai.live.connect({
