@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { Message, Role, UserSettings, ModelTier } from '../types';
 import { Icon } from './Icon';
 import { generateSpeech } from '../services/geminiService';
+import { getSharedAudioContext } from '../services/audioUtils';
 import { TypingIndicator } from './TypingIndicator';
 import { CodeBlock } from './CodeBlock';
 
@@ -39,7 +40,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
         
         if (audioBuffer) {
             setIsPlaying(true);
-            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            // Use the SHARED context that created the buffer
+            const ctx = getSharedAudioContext();
             const source = ctx.createBufferSource();
             source.buffer = audioBuffer;
             source.connect(ctx.destination);

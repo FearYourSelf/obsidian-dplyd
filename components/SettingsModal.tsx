@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { UserSettings, Memory } from '../types';
-import { VOICES, TONES } from '../constants';
+import { VOICES } from '../constants';
 import { Icon } from './Icon';
 import { generateSpeech } from '../services/geminiService';
+import { getSharedAudioContext } from '../services/audioUtils';
 import { loadMemories, saveMemories, exportAllData, deleteAllChats, addMemory } from '../services/storageService';
 
 interface SettingsModalProps {
@@ -39,21 +40,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, 
     }, 300);
   };
 
-  const playVoicePreview = async (voiceName: string, tone?: string) => {
+  const playVoicePreview = async (voiceName: string) => {
       if (isPlayingPreview) return;
       setIsPlayingPreview(true);
       
       let text = "This is the voice of Obsidian, powered by N S D Core.";
       
-      if (tone === 'Unhinged') {
-          text = "Oh, so you want to get crazy? Let's see if you can handle Obsidian when the safety's off.";
-      } else if (tone) {
-          text = `I am speaking in a ${tone} tone. This is the voice of Obsidian.`;
-      }
-
       const buffer = await generateSpeech(text, voiceName);
       if (buffer) {
-          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const ctx = getSharedAudioContext();
           const source = ctx.createBufferSource();
           source.buffer = buffer;
           source.connect(ctx.destination);
@@ -103,7 +98,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, 
           <div className="w-48 border-r border-obsidian-800 bg-obsidian-950/50 p-4 space-y-1">
              {[
                  { id: 'personalization', label: 'Personalization' },
-                 { id: 'voice', label: 'Voice & Tone' },
+                 { id: 'voice', label: 'Voice' },
                  { id: 'memory', label: 'Memory Bank' },
                  { id: 'data', label: 'Data Controls' },
              ].map(tab => (
@@ -213,39 +208,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, 
                             ))}
                         </div>
                     </div>
-
-                    <div>
-                        <label className="block text-xs font-mono text-obsidian-400 uppercase mb-2">Base Tone</label>
-                        <div className="grid grid-cols-2 gap-2">
-                             {TONES.map(t => {
-                                 const isUnhinged = t === 'Unhinged';
-                                 return (
-                                     <div
-                                        key={t}
-                                        className={`flex items-center justify-between p-3 border rounded transition-all cursor-pointer ${
-                                            localSettings.tone === t 
-                                                ? (isUnhinged ? 'border-red-600 bg-red-900/20 text-red-500' : 'border-white bg-obsidian-800 text-white')
-                                                : (isUnhinged ? 'border-obsidian-700 text-red-700 hover:border-red-900' : 'border-obsidian-700 text-obsidian-400 hover:border-obsidian-500')
-                                        }`}
-                                        onClick={() => handleChange('tone', t)}
-                                     >
-                                         <div className="flex items-center gap-2">
-                                            <span className="text-xs">{t}</span>
-                                            {isUnhinged && <span className="text-[10px] bg-red-600 text-black px-1 rounded font-bold">18+</span>}
-                                         </div>
-                                         <button 
-                                            onClick={(e) => { e.stopPropagation(); playVoicePreview(localSettings.voice, t); }}
-                                            disabled={isPlayingPreview}
-                                            className={`p-1.5 hover:text-white ${isUnhinged ? 'text-red-600' : 'text-obsidian-400'}`}
-                                            title="Preview Tone"
-                                         >
-                                             <Icon name="play" className="w-3 h-3" />
-                                         </button>
-                                     </div>
-                                 );
-                             })}
-                        </div>
-                    </div>
+                    {/* Tone Selector Moved to Header - Removed from here */}
                 </div>
             )}
 

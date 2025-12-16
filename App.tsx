@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { ChatState, Message, Role, ModelTier, AppConfig, Attachment, SavedChat, UserSettings } from './types';
-import { MODEL_MAPPING } from './constants';
+import { MODEL_MAPPING, TONES } from './constants';
 import { streamChatResponse } from './services/geminiService';
 import { loadSettings, saveSettings, loadChats, saveSingleChat, deleteChat, addMemory } from './services/storageService';
 import { MessageBubble } from './components/MessageBubble';
@@ -92,12 +92,30 @@ const App: React.FC = () => {
     setSavedChats(loadChats());
   }, []);
 
-  // Scroll on message update
-  useEffect(() => {
-    // If the last message is streaming, we want INSTANT snap to bottom (auto) to prevent drifting
+  // SCROLL LOCK ENGINE
+  // Use useLayoutEffect to update scroll position synchronously after DOM mutations but before paint
+  useLayoutEffect(() => {
     const lastMsg = chatState.messages[chatState.messages.length - 1];
     const isStreaming = lastMsg?.isStreaming;
-    scrollToBottom(!isStreaming); 
+
+    if (scrollContainerRef.current) {
+        if (isStreaming) {
+            // Force instant scroll without animation during streaming
+            scrollContainerRef.current.style.scrollBehavior = 'auto';
+            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+        } else {
+             // Re-enable smooth scrolling for manual user actions or new messages
+             scrollContainerRef.current.style.scrollBehavior = 'smooth';
+             
+             // Check if we are close to bottom or if it's a fresh message
+             const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+             const isNearBottom = scrollHeight - scrollTop - clientHeight < 300;
+             
+             if (isNearBottom || lastMsg?.role === Role.USER) {
+                 scrollToBottom(true);
+             }
+        }
+    }
   }, [chatState.messages]);
 
   // Auto-save chat when messages change
@@ -137,7 +155,11 @@ const App: React.FC = () => {
   // --- Handlers ---
 
   const scrollToBottom = (smooth = true) => {
-    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+    if (scrollContainerRef.current) {
+        // Enforce smooth behavior programmatically if requested
+        scrollContainerRef.current.style.scrollBehavior = smooth ? 'smooth' : 'auto';
+        messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+    }
   };
 
   const handleScroll = (e: React.UIEvent<HTMLElement>) => {
@@ -151,6 +173,11 @@ const App: React.FC = () => {
       setUserSettings(newSettings);
       // Persist to storage
       saveSettings(newSettings);
+  };
+
+  const handleToneChange = (newTone: string) => {
+      const updated = { ...userSettings, tone: newTone };
+      handleSettingsSave(updated);
   };
 
   const handleSendMessage = async () => {
@@ -316,27 +343,46 @@ const App: React.FC = () => {
       if (config.modelTier === ModelTier.FAST) return "Quick";
       return "Balanced";
   };
+  
+  const isUnhinged = userSettings.tone === 'Unhinged';
 
   return (
-    <div className="flex flex-col h-screen bg-obsidian-950 text-obsidian-200 font-sans overflow-hidden selection:bg-obsidian-700 selection:text-white relative">
+    <div className={`flex flex-col h-screen font-sans overflow-hidden selection:bg-obsidian-700 selection:text-white relative transition-colors duration-1000 ${isUnhinged ? 'bg-[#050000]' : 'bg-obsidian-950'} text-obsidian-200`}>
       
       {/* Backgrounds - Boosted Visibility */}
       <div className="bg-noise absolute inset-0 z-0 opacity-[0.03]"></div>
-      <div className="absolute inset-0 z-0 bg-gradient-radial from-obsidian-900 via-obsidian-950 to-obsidian-950 opacity-90 animate-aurora pointer-events-none"></div>
+      <div className={`absolute inset-0 z-0 bg-gradient-radial opacity-90 animate-aurora pointer-events-none ${isUnhinged ? 'from-[#1a0000] via-[#050000] to-[#000000]' : 'from-obsidian-900 via-obsidian-950 to-obsidian-950'}`}></div>
 
       {/* Header - Fixed Position */}
-      <header className="fixed top-0 left-0 right-0 h-16 flex items-center justify-between px-6 z-50 bg-gradient-to-b from-obsidian-950 to-obsidian-950/90 backdrop-blur-md border-b border-white/5">
+      <header className={`fixed top-0 left-0 right-0 h-16 flex items-center justify-between px-6 z-50 backdrop-blur-md border-b transition-colors duration-500 ${isUnhinged ? 'bg-[#050000]/90 border-red-900/20' : 'bg-gradient-to-b from-obsidian-950 to-obsidian-950/90 border-white/5'}`}>
         <div className="flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(true)} className="text-obsidian-500 hover:text-white transition-colors">
                 <Icon name="menu" className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-3 select-none">
-              <div className="w-2 h-2 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.3)] animate-pulse-slow"></div>
-              <h1 className="text-xs font-semibold tracking-[0.2em] text-white opacity-90">OBSIDIAN</h1>
+              <div className={`w-2 h-2 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.3)] animate-pulse-slow ${isUnhinged ? 'bg-red-600 shadow-red-500/50' : 'bg-white'}`}></div>
+              <h1 className={`text-xs font-semibold tracking-[0.2em] opacity-90 ${isUnhinged ? 'text-red-500' : 'text-white'}`}>
+                OBSIDIAN
+                {isUnhinged && <span className="ml-2 px-1.5 py-0.5 bg-red-900/30 border border-red-800 rounded text-[9px] font-mono text-red-500 animate-pulse">UNHINGED</span>}
+              </h1>
             </div>
         </div>
 
         <div className="flex items-center gap-4">
+             {/* Tone Selector in Header */}
+            <select 
+                value={userSettings.tone}
+                onChange={(e) => handleToneChange(e.target.value)}
+                className={`bg-transparent text-[10px] font-mono uppercase tracking-widest border-none focus:ring-0 cursor-pointer hover:text-white transition-colors text-right appearance-none pr-4 outline-none ${isUnhinged ? 'text-red-600 hover:text-red-400' : 'text-obsidian-500'}`}
+                style={{ textAlignLast: 'right' }} // Aligns text to right in some browsers
+            >
+                {TONES.map(t => (
+                    <option key={t} value={t} className="bg-obsidian-900 text-obsidian-300">{t}</option>
+                ))}
+            </select>
+
+            <div className="h-3 w-px bg-obsidian-800"></div>
+
             <button 
                 onClick={toggleModel}
                 className="text-[10px] font-mono uppercase tracking-widest text-obsidian-500 hover:text-white transition-colors flex items-center gap-2"
@@ -344,7 +390,9 @@ const App: React.FC = () => {
                 <Icon name={config.enableThinking ? "cpu" : "zap"} className="w-3 h-3" />
                 {getModelLabel()}
             </button>
+            
             <div className="h-3 w-px bg-obsidian-800"></div>
+            
             <button 
                 onClick={() => setIsSettingsOpen(true)}
                 className="text-obsidian-500 hover:text-white transition-colors"
@@ -365,8 +413,8 @@ const App: React.FC = () => {
           
           {chatState.messages.length === 0 && (
              <div className="flex-1 flex flex-col items-center justify-center opacity-30 select-none pb-20 animate-fade-in-up">
-                <div className="w-20 h-20 border border-obsidian-800 rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
-                    <Icon name="cpu" className="w-6 h-6 text-obsidian-600" />
+                <div className={`w-20 h-20 border rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(0,0,0,0.5)] ${isUnhinged ? 'border-red-900/50 bg-red-950/10' : 'border-obsidian-800'}`}>
+                    <Icon name="cpu" className={`w-6 h-6 ${isUnhinged ? 'text-red-600' : 'text-obsidian-600'}`} />
                 </div>
                 <p className="text-xs tracking-[0.3em] uppercase">System Online</p>
                 <p className="text-[10px] text-obsidian-600 mt-2 font-mono">NSD-CORE/70B • Ready</p>
@@ -444,7 +492,7 @@ const App: React.FC = () => {
       )}
 
       {/* Input Area - Already fixed position in original code, no change needed */}
-      <div className="fixed bottom-0 left-0 right-0 pt-12 pb-8 px-4 z-20 bg-gradient-to-t from-obsidian-950 via-obsidian-950 to-transparent">
+      <div className={`fixed bottom-0 left-0 right-0 pt-12 pb-8 px-4 z-20 bg-gradient-to-t via-obsidian-950 to-transparent ${isUnhinged ? 'from-[#050000]' : 'from-obsidian-950'}`}>
          <div className="max-w-3xl mx-auto animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
              
              {/* Attachment Previews */}
@@ -486,7 +534,7 @@ const App: React.FC = () => {
                     
                     <button 
                         onClick={() => setChatState(prev => ({...prev, mode: 'live'}))}
-                        className="p-2 text-obsidian-500 hover:text-white transition-colors rounded-lg hover:bg-obsidian-800/50"
+                        className={`p-2 transition-colors rounded-lg hover:bg-obsidian-800/50 ${isUnhinged ? 'text-red-500 hover:text-red-400' : 'text-obsidian-500 hover:text-white'}`}
                         title="Live Voice Mode"
                     >
                         <Icon name="mic" />
@@ -548,7 +596,7 @@ const App: React.FC = () => {
 
       {/* Live Interface Modal */}
       {chatState.mode === 'live' && (
-          <LiveInterface onClose={() => setChatState(prev => ({...prev, mode: 'chat'}))} />
+          <LiveInterface onClose={() => setChatState(prev => ({...prev, mode: 'chat'}))} settings={userSettings} />
       )}
 
     </div>
