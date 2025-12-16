@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>OBSIDIAN</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'system-ui', 'sans-serif'],
+              mono: ['JetBrains Mono', 'Menlo', 'monospace'],
+            },
+            colors: {
+              obsidian: {
+                950: '#050505',
+                900: '#0a0a0a',
+                800: '#171717',
+                700: '#262626',
+                600: '#404040',
+                500: '#525252',
+                400: '#737373',
+                300: '#a3a3a3',
+                200: '#e5e5e5',
+                100: '#f5f5f5',
+              },
+            },
+            backgroundImage: {
+              'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+            },
+            animation: {
+              'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'fade-in-up': 'fadeInUp 0.5s ease-out forwards',
+              'fade-out-long': 'fadeOut 1.5s ease-out forwards',
+              'neural-wave': 'neuralWave 1.5s ease-in-out infinite',
+              'ping-slow': 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite',
+              'aurora': 'aurora 20s ease infinite alternate',
+              'glow': 'glow 2s ease-in-out infinite alternate',
+            },
+            keyframes: {
+              fadeInUp: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              fadeOut: {
+                '0%': { opacity: '1' },
+                '100%': { opacity: '0' },
+              },
+              neuralWave: {
+                '0%, 100%': { height: '8px', opacity: '0.5' },
+                '50%': { height: '16px', opacity: '1' }
+              },
+              aurora: {
+                '0%': { transform: 'scale(1) translate(0, 0)', opacity: '0.1' },
+                '50%': { transform: 'scale(1.1) translate(-2%, 2%)', opacity: '0.2' },
+                '100%': { transform: 'scale(1) translate(2%, -2%)', opacity: '0.1' }
+              },
+              glow: {
+                '0%': { boxShadow: '0 0 5px rgba(255, 255, 255, 0.05)' },
+                '100%': { boxShadow: '0 0 15px rgba(255, 255, 255, 0.1)' }
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      /* Global Lockdown */
+      html, body {
+        height: 100%;
+        overflow: hidden; 
+        background-color: #050505;
+        color: #e5e5e5;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      input, textarea, .markdown-body, .prose {
+        user-select: text;
+        -webkit-user-select: text;
+      }
+      
+      html {
+        scroll-behavior: smooth;
+      }
+
+      /* Ghost Scrollbar - Only visible on hover/interaction */
+      .ghost-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: transparent transparent; /* Hide initially FF */
+        transition: scrollbar-color 0.3s ease;
+      }
+      
+      .ghost-scrollbar:hover {
+        scrollbar-color: #262626 transparent; /* Dark thumb, transparent track */
+      }
+
+      /* Webkit Ghost Scrollbar */
+      .ghost-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      .ghost-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .ghost-scrollbar::-webkit-scrollbar-thumb {
+        background-color: transparent;
+        border-radius: 10px;
+        border: 2px solid transparent; /* Padding trick */
+        background-clip: content-box;
+        transition: background-color 0.3s ease;
+      }
+      .ghost-scrollbar:hover::-webkit-scrollbar-thumb {
+        background-color: #262626;
+      }
+      .ghost-scrollbar::-webkit-scrollbar-thumb:hover {
+        background-color: #404040; /* Lighter on direct grab */
+      }
+
+      /* Markdown Styles Refined */
+      .markdown-body ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; color: #a3a3a3; }
+      .markdown-body ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1rem; color: #a3a3a3; }
+      .markdown-body p { margin-bottom: 0.75rem; line-height: 1.7; letter-spacing: 0.01em; }
+      .markdown-body h1, .markdown-body h2, .markdown-body h3 { 
+        font-weight: 500; 
+        margin-top: 2rem; 
+        margin-bottom: 1rem; 
+        color: #fff; 
+        letter-spacing: -0.02em; 
+      }
+      .markdown-body h1 { font-size: 1.5em; border-bottom: 1px solid #171717; padding-bottom: 0.5rem; }
+      .markdown-body h2 { font-size: 1.25em; }
+      
+      /* Inline Code */
+      .markdown-body :not(pre) > code { 
+        background: #171717; 
+        padding: 0.1em 0.4em; 
+        border-radius: 4px; 
+        font-family: 'JetBrains Mono', monospace; 
+        font-size: 0.85em; 
+        color: #e5e5e5;
+        border: 1px solid #262626;
+      }
+      
+      /* Blockquote */
+      .markdown-body blockquote { 
+        border-left: 2px solid #262626; 
+        padding-left: 1rem; 
+        color: #737373; 
+        font-style: italic; 
+        margin-left: 0;
+      }
+
+      /* Styling for Noise */
+      .bg-noise {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 50;
+        opacity: 0.03;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+      }
+
+      textarea:focus, input:focus {
+        outline: none;
+        box-shadow: none;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "uuid": "https://esm.sh/uuid@^13.0.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

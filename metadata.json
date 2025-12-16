@@ -1,0 +1,8 @@
+{
+  "name": "OBSIDIAN",
+  "description": "A premium, minimalist AI assistant designed for clarity and precision. Powered by Gemini 3 Pro and NSD-CORE concepts.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
