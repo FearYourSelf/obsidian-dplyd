@@ -76,6 +76,7 @@
         color: #e5e5e5;
         user-select: none;
         -webkit-user-select: none;
+        /* SCROLL BEHAVIOR REMOVED HERE TO FIX DRIFTING */
       }
 
       input, textarea, .markdown-body, .prose {
@@ -83,10 +84,6 @@
         -webkit-user-select: text;
       }
       
-      html {
-        scroll-behavior: smooth;
-      }
-
       /* Ghost Scrollbar - Only visible on hover/interaction */
       .ghost-scrollbar {
         scrollbar-width: thin;
