@@ -48,6 +48,7 @@ const App: React.FC = () => {
   const [showSaveToast, setShowSaveToast] = useState(false); 
   const [showMemoryToast, setShowMemoryToast] = useState(false);
   const [isSearchEnabled, setIsSearchEnabled] = useState(false);
+  const [isStudyDropdownOpen, setIsStudyDropdownOpen] = useState(false); // New Academics State
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -56,7 +57,6 @@ const App: React.FC = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   
   // SCROLLING LOGIC REF
-  // We track this manually to decouple render cycles from scroll intent
   const autoScrollEnabledRef = useRef(true);
 
   // --- Effects ---
@@ -83,9 +83,19 @@ const App: React.FC = () => {
     document.addEventListener('contextmenu', handleContextMenu);
     document.addEventListener('keydown', handleKeyDown);
 
+    // Close Dropdown on Click Outside
+    const handleClickOutside = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (!target.closest('.study-dropdown') && !target.closest('.study-toggle')) {
+            setIsStudyDropdownOpen(false);
+        }
+    };
+    document.addEventListener('click', handleClickOutside);
+
     return () => {
         document.removeEventListener('contextmenu', handleContextMenu);
         document.removeEventListener('keydown', handleKeyDown);
+        document.removeEventListener('click', handleClickOutside);
     };
   }, []);
 
@@ -99,13 +109,11 @@ const App: React.FC = () => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    // If auto-scroll is enabled (user hasn't scrolled up), snap to bottom instantly
     if (autoScrollEnabledRef.current) {
-        // Disable scroll behavior for instant snap, preventing drift/jitter
         container.style.scrollBehavior = 'auto'; 
         container.scrollTop = container.scrollHeight;
     }
-  }, [chatState.messages]); // Runs synchronously after every message update
+  }, [chatState.messages]);
 
   // Auto-save chat when messages change
   useEffect(() => {
@@ -145,7 +153,6 @@ const App: React.FC = () => {
         scrollContainerRef.current.style.scrollBehavior = smooth ? 'smooth' : 'auto';
         scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
         
-        // Re-enable sticky scroll if user manually clicked the button
         autoScrollEnabledRef.current = true;
         setShowScrollButton(false);
     }
@@ -153,14 +160,8 @@ const App: React.FC = () => {
 
   const handleScroll = (e: React.UIEvent<HTMLElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-    
-    // Threshold to detect if user is at the bottom
     const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
-    
-    // Update the ref. If at bottom, enable stickiness. If not, disable it.
     autoScrollEnabledRef.current = isAtBottom;
-    
-    // Show/Hide button based on position
     setShowScrollButton(!isAtBottom);
   };
 
@@ -179,10 +180,22 @@ const App: React.FC = () => {
       handleSettingsSave(updated);
   };
 
+  const handleStudyOption = (type: 'study' | 'homework' | 'explain' | 'quiz') => {
+      let prompt = "";
+      switch(type) {
+          case 'study': prompt = "Help me study "; break;
+          case 'homework': prompt = "Help me solve this problem: "; break;
+          case 'explain': prompt = "Explain [topic] to me simply: "; break;
+          case 'quiz': prompt = "Create a practice quiz about "; break;
+      }
+      setInput(prompt);
+      inputRef.current?.focus();
+      setIsStudyDropdownOpen(false);
+  };
+
   const handleSendMessage = async () => {
     if ((!input.trim() && attachments.length === 0) || chatState.isLoading) return;
 
-    // User interaction forces scroll to bottom
     autoScrollEnabledRef.current = true;
     scrollToBottom(true);
 
@@ -261,7 +274,8 @@ const App: React.FC = () => {
                     : msg
                 )
             }));
-        }
+        },
+        chatState.currentChatId // Pass current Chat ID
       );
 
       let finalText = accumulatedText;
@@ -433,10 +447,7 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Chat Area 
-          CHANGED: justify-end removed. mt-auto added to inner wrapper to handle bottom alignment.
-          CHANGED: style={{ overflowAnchor: 'none' }} added to container to prevent browser fighting.
-      */}
+      {/* Main Chat Area */}
       <main 
         className="ghost-scrollbar flex-1 h-screen overflow-y-auto px-4 sm:px-0 z-10 pt-16 relative" 
         ref={scrollContainerRef}
@@ -445,9 +456,7 @@ const App: React.FC = () => {
       >
         <div className="max-w-3xl mx-auto min-h-full flex flex-col pb-40 pt-10 relative">
           
-          {/* Messages Wrapper: Auto margin top pushes content to bottom when few messages */}
           <div className="mt-auto flex flex-col">
-          
               {chatState.messages.length === 0 && (
                  <div className="flex flex-col items-center justify-center opacity-30 select-none pb-20 animate-fade-in-up py-20">
                     <div className={`w-20 h-20 border rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(0,0,0,0.5)] ${isUnhinged ? 'border-red-900/50 bg-red-950/10' : 'border-obsidian-800'}`}>
@@ -474,7 +483,6 @@ const App: React.FC = () => {
                 </React.Fragment>
               ))}
               
-              {/* Status Indicators */}
               <div className="ml-4 mt-2 mb-10 h-6">
                 {chatState.isLoading && chatState.messages.length > 0 && chatState.messages[chatState.messages.length-1].thinking && (
                     <div className="text-[10px] text-obsidian-500 font-mono animate-pulse flex items-center gap-2">
@@ -533,8 +541,44 @@ const App: React.FC = () => {
 
       {/* Input Area */}
       <div className={`fixed bottom-0 left-0 right-0 pt-12 pb-8 px-4 z-20 bg-gradient-to-t via-obsidian-950 to-transparent ${isUnhinged ? 'from-[#050000]' : 'from-obsidian-950'}`}>
-         <div className="max-w-3xl mx-auto animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+         
+         <div className="max-w-3xl mx-auto animate-fade-in-up relative" style={{ animationDelay: '0.1s' }}>
              
+             {/* Academics Dropdown */}
+             {isStudyDropdownOpen && (
+                 <div className="study-dropdown absolute bottom-full left-0 mb-3 w-64 bg-obsidian-900 border border-obsidian-800 rounded-lg shadow-2xl overflow-hidden animate-fade-in-up z-50">
+                     <div className="p-3 bg-obsidian-950/50 border-b border-obsidian-800">
+                         <h3 className="text-xs font-mono uppercase tracking-widest text-obsidian-400">Academics</h3>
+                     </div>
+                     <div className="p-1">
+                         <button onClick={() => handleStudyOption('study')} className="w-full text-left flex items-center gap-3 p-2.5 rounded hover:bg-obsidian-800 transition-colors group">
+                             <div className="p-1.5 bg-blue-900/20 rounded text-blue-400 group-hover:text-blue-300 group-hover:bg-blue-900/30">
+                                 <Icon name="book" className="w-4 h-4" />
+                             </div>
+                             <span className="text-sm text-obsidian-300 group-hover:text-white">Study Partner</span>
+                         </button>
+                         <button onClick={() => handleStudyOption('homework')} className="w-full text-left flex items-center gap-3 p-2.5 rounded hover:bg-obsidian-800 transition-colors group">
+                             <div className="p-1.5 bg-purple-900/20 rounded text-purple-400 group-hover:text-purple-300 group-hover:bg-purple-900/30">
+                                 <Icon name="pen" className="w-4 h-4" />
+                             </div>
+                             <span className="text-sm text-obsidian-300 group-hover:text-white">Homework Aid</span>
+                         </button>
+                         <button onClick={() => handleStudyOption('explain')} className="w-full text-left flex items-center gap-3 p-2.5 rounded hover:bg-obsidian-800 transition-colors group">
+                             <div className="p-1.5 bg-green-900/20 rounded text-green-400 group-hover:text-green-300 group-hover:bg-green-900/30">
+                                 <Icon name="brain" className="w-4 h-4" />
+                             </div>
+                             <span className="text-sm text-obsidian-300 group-hover:text-white">Explain Concept</span>
+                         </button>
+                         <button onClick={() => handleStudyOption('quiz')} className="w-full text-left flex items-center gap-3 p-2.5 rounded hover:bg-obsidian-800 transition-colors group">
+                             <div className="p-1.5 bg-yellow-900/20 rounded text-yellow-400 group-hover:text-yellow-300 group-hover:bg-yellow-900/30">
+                                 <Icon name="quiz" className="w-4 h-4" />
+                             </div>
+                             <span className="text-sm text-obsidian-300 group-hover:text-white">Generate Quiz</span>
+                         </button>
+                     </div>
+                 </div>
+             )}
+
              {/* Attachment Previews */}
              {attachments.length > 0 && (
                 <div className="flex gap-2 mb-3 px-1 overflow-x-auto animate-fade-in-up">
@@ -586,6 +630,15 @@ const App: React.FC = () => {
                         title={isSearchEnabled ? "Search Enabled" : "Enable Web Search"}
                     >
                         <Icon name="globe" />
+                    </button>
+
+                    {/* ACADEMICS BUTTON - NEW */}
+                    <button 
+                        onClick={() => setIsStudyDropdownOpen(!isStudyDropdownOpen)}
+                        className={`study-toggle p-2 transition-colors rounded-lg hover:bg-obsidian-800/50 ${isStudyDropdownOpen ? 'text-white bg-obsidian-800' : 'text-obsidian-500 hover:text-white'}`}
+                        title="Academics"
+                    >
+                        <Icon name="book" />
                     </button>
                 </div>
 

@@ -103,6 +103,50 @@ export const archiveAllChats = () => {
     return updated;
 };
 
+// --- Search / Memory ---
+export const findRelevantChatSegments = (query: string, currentChatId: string | null): string => {
+    const chats = loadChats();
+    // Clean query and extract keywords (words > 3 chars)
+    const keywords = query.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 3);
+    if (keywords.length === 0) return "";
+
+    const candidates: { score: number, content: string, date: number }[] = [];
+
+    chats.forEach(chat => {
+        if (chat.id === currentChatId) return; // Skip current chat
+
+        chat.messages.forEach((msg, idx) => {
+            if (msg.role === Role.USER) {
+                let score = 0;
+                const text = msg.content.toLowerCase();
+                keywords.forEach(kw => {
+                    if (text.includes(kw)) score++;
+                });
+
+                // Bonus for recency (not implemented complexly, just date sort later)
+                if (score > 0) {
+                    // Get the assistant response if it exists
+                    const response = chat.messages[idx + 1];
+                    const obsContent = response?.content ? response.content.substring(0, 300) + "..." : "[No response]";
+                    // Format as a memory snippet
+                    let snippet = `[Date: ${new Date(msg.timestamp).toLocaleDateString()}]\nUser: ${msg.content}\nObsidian: ${obsContent}`;
+                    candidates.push({ score, content: snippet, date: msg.timestamp });
+                }
+            }
+        });
+    });
+
+    // Sort by Score desc, then Date desc
+    candidates.sort((a, b) => b.score - a.score || b.date - a.date);
+    
+    // Take top 3 most relevant snippets
+    const top = candidates.slice(0, 3);
+    
+    if (top.length === 0) return "";
+
+    return top.map(c => c.content).join("\n---\n");
+};
+
 // --- Link Extraction ---
 export interface SharedLink {
     url: string;

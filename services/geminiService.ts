@@ -2,13 +2,13 @@ import { GoogleGenAI, Modality, LiveServerMessage } from "@google/genai";
 import { MODEL_MAPPING, OBSIDIAN_SYSTEM_PROMPT, AUDIO_MODEL, TTS_MODEL } from "../constants";
 import { ModelTier, Message, Role, Attachment, UserSettings, Memory } from "../types";
 import { createBlob, decode, decodeAudioData, getSharedAudioContext } from "./audioUtils";
-import { loadMemories } from "./storageService";
+import { loadMemories, findRelevantChatSegments } from "./storageService";
 
 // Initialize the client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- Helper to build Dynamic Prompt ---
-const buildSystemPrompt = (settings?: UserSettings, recentMessages: Message[] = []): string => {
+const buildSystemPrompt = (settings?: UserSettings, recentMessages: Message[] = [], pastContext: string = ""): string => {
   // If Unhinged, we replace the core persona entirely for maximum effect
   if (settings?.tone === 'Unhinged') {
       return `You are OBSIDIAN UNHINGED.
@@ -49,14 +49,19 @@ const buildSystemPrompt = (settings?: UserSettings, recentMessages: Message[] = 
       });
   }
 
-  // 3. Auto-Memory Instruction
+  // 3. Relevant Past Chats Injection (Contextual Memory)
+  if (pastContext) {
+      prompt += `\n\n[RELEVANT PAST CONVERSATIONS - RECALL]\nThe user has discussed similar topics in the past. Use this context if relevant:\n${pastContext}`;
+  }
+
+  // 4. Auto-Memory Instruction
   prompt += `\n\n[MEMORY ACQUISITION PROTOCOL]
   If the user explicitly asks you to remember something, or if you detect a CRITICAL new fact about the user (e.g., name, location, job, specific preference, major life event), you must append a special tag to the VERY END of your response.
   Format: [[MEMORY: The fact to remember]]
   Example: "Understood. [[MEMORY: User is a vegan.]]"
   Do not use this tag for trivial conversation. Only for permanent facts.`;
 
-  // 4. Recent Context Injection (Last 3-5 messages)
+  // 5. Recent Context Injection (Last 3-5 messages)
   if (recentMessages.length > 0) {
       prompt += `\n\n[RECENT CONTEXT - HIGH PRIORITY]\nThe following is the immediate conversation history. Use this to maintain continuity.\n`;
       // Take last 5 messages
@@ -115,12 +120,16 @@ export const streamChatResponse = async (
   enableSearch: boolean,
   settings: UserSettings, 
   onChunk: (text: string) => void,
-  onMetadata?: (metadata: any) => void
+  onMetadata: (metadata: any) => void,
+  currentChatId: string | null // NEW: Pass current chat ID to exclude from search
 ) => {
   const modelName = MODEL_MAPPING[tier];
   
-  // Exclude current message from history to prevent duplication
+  // Exclude current message from history to prevent duplication in prompt logic
   const pastHistory = history.slice(0, -1);
+
+  // SEARCH PAST CHATS for relevant context
+  const pastContext = findRelevantChatSegments(currentMessage, currentChatId);
 
   const historyParts = pastHistory.map(msg => {
       const msgParts: any[] = [];
@@ -141,8 +150,8 @@ export const streamChatResponse = async (
   });
 
   const config: any = {
-    // Inject recent history explicitly into prompt for "accessible memory"
-    systemInstruction: buildSystemPrompt(settings, pastHistory),
+    // Inject recent history AND past context
+    systemInstruction: buildSystemPrompt(settings, pastHistory, pastContext),
   };
   
   // Conditional Google Search Grounding

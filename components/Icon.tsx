@@ -1,6 +1,6 @@
 import React from 'react';
 
-type IconName = 'send' | 'paperclip' | 'mic' | 'stop' | 'x' | 'cpu' | 'zap' | 'volume' | 'copy' | 'check' | 'thumbs-up' | 'thumbs-down' | 'menu' | 'settings' | 'trash' | 'history' | 'plus' | 'save' | 'play' | 'globe' | 'archive' | 'unarchive' | 'external-link' | 'lock' | 'shield';
+type IconName = 'send' | 'paperclip' | 'mic' | 'stop' | 'x' | 'cpu' | 'zap' | 'volume' | 'copy' | 'check' | 'thumbs-up' | 'thumbs-down' | 'menu' | 'settings' | 'trash' | 'history' | 'plus' | 'save' | 'play' | 'globe' | 'archive' | 'unarchive' | 'external-link' | 'lock' | 'shield' | 'book' | 'hat' | 'brain' | 'pen' | 'quiz';
 
 interface IconProps {
   name: IconName;
@@ -59,6 +59,16 @@ export const Icon: React.FC<IconProps> = ({ name, className = "w-5 h-5" }) => {
         return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>;
     case 'shield':
         return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>;
+    case 'book':
+        return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>;
+    case 'hat':
+        return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>;
+    case 'brain':
+        return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"></path><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"></path></svg>;
+    case 'pen':
+        return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>;
+    case 'quiz':
+        return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>;
     default:
       return null;
   }
