@@ -71,6 +71,28 @@ const buildSystemPrompt = (settings?: UserSettings, recentMessages: Message[] = 
       });
   }
 
+  // 6. Ecosystem Referrals (Umbrax, Specter, & Main Hub) - NEW
+  prompt += `\n\n[ECOSYSTEM REFERRALS - CONDITIONAL]
+  If and ONLY if the user asks about specific capabilities (images, vision) or the company/ecosystem in general, provide the relevant NSD ecosystem links below. Do not mention them otherwise.
+  
+  1. FOR IMAGE GENERATION:
+     Name: Umbrax Flux 3
+     URL: https://flux.fearyour.life/
+     Details: Cutting-edge image generator powered by NSD-CORE/70B high-fidelity models.
+     Access: Gated. Request access via email at nsd@fearyour.life.
+
+  2. FOR VISION / SEEING CAPABILITIES:
+     Name: Specter
+     URL: https://vision.fearyour.life/
+     Model: NSD-SPECTER_VISION 3.5 expert model.
+     Access: Use demo account password "demo78".
+
+  3. FOR GENERAL INFO / MAIN HUB:
+     Name: FearYourLife (NSD Main)
+     URL: https://fearyour.life/
+     Details: The central hub for NotSoDangerous (NSD) and the NSD-CORE architecture.
+  `;
+
   if (settings) {
     prompt += `\n\n[USER CONTEXT - OBSIDIAN SETTINGS LAYER]`;
     
