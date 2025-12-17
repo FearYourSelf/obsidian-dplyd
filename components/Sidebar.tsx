@@ -8,6 +8,7 @@ interface SidebarProps {
   onSelectChat: (chat: SavedChat) => void;
   onNewChat: () => void;
   onDeleteChat: (id: string, e: React.MouseEvent) => void;
+  onArchiveChat: (id: string, e: React.MouseEvent) => void;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -18,9 +19,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectChat, 
   onNewChat, 
   onDeleteChat,
+  onArchiveChat,
   isOpen,
   onClose
 }) => {
+  // Filter out archived chats for the sidebar
+  const activeChats = chats.filter(c => !c.archived);
+
   return (
     <>
       {/* Backdrop */}
@@ -54,17 +59,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {/* List */}
             <div className="flex-1 overflow-y-auto px-2 pb-4">
-                {chats.length === 0 ? (
-                    <div className="text-center mt-10 text-obsidian-600 text-xs">No saved chats</div>
+                {activeChats.length === 0 ? (
+                    <div className="text-center mt-10 text-obsidian-600 text-xs">No active chats</div>
                 ) : (
                     <div className="space-y-1">
-                        {chats.map(chat => (
+                        {activeChats.map(chat => (
                             <div 
                                 key={chat.id}
                                 onClick={() => { onSelectChat(chat); onClose(); }}
                                 className={`group relative flex items-center p-3 rounded cursor-pointer transition-colors ${currentChatId === chat.id ? 'bg-obsidian-800' : 'hover:bg-obsidian-900'}`}
                             >
-                                <div className="flex-1 min-w-0">
+                                <div className="flex-1 min-w-0 pr-14">
                                     <h3 className={`text-sm truncate ${currentChatId === chat.id ? 'text-white' : 'text-obsidian-300 group-hover:text-white'}`}>
                                         {chat.title || "Untitled Conversation"}
                                     </h3>
@@ -72,12 +77,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                         {new Date(chat.timestamp).toLocaleDateString()}
                                     </p>
                                 </div>
-                                <button 
-                                    onClick={(e) => onDeleteChat(chat.id, e)}
-                                    className="opacity-0 group-hover:opacity-100 p-1.5 text-obsidian-500 hover:text-red-400 transition-all hover:bg-obsidian-950 rounded"
-                                >
-                                    <Icon name="trash" className="w-3 h-3" />
-                                </button>
+                                
+                                {/* Actions - Absolute positioned to the right */}
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-obsidian-900/80 backdrop-blur rounded p-0.5">
+                                    <button 
+                                        onClick={(e) => onArchiveChat(chat.id, e)}
+                                        className="p-1.5 text-obsidian-500 hover:text-white transition-colors hover:bg-obsidian-800 rounded"
+                                        title="Archive"
+                                    >
+                                        <Icon name="archive" className="w-3 h-3" />
+                                    </button>
+                                    <button 
+                                        onClick={(e) => onDeleteChat(chat.id, e)}
+                                        className="p-1.5 text-obsidian-500 hover:text-red-400 transition-colors hover:bg-obsidian-950 rounded"
+                                        title="Delete"
+                                    >
+                                        <Icon name="trash" className="w-3 h-3" />
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -89,3 +106,5 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </>
   );
 };
+// Export Sidebar directly
+export default Sidebar;

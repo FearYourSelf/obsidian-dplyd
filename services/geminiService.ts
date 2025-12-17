@@ -112,8 +112,10 @@ export const streamChatResponse = async (
   attachments: Attachment[],
   tier: ModelTier,
   enableThinking: boolean,
+  enableSearch: boolean,
   settings: UserSettings, 
-  onChunk: (text: string) => void
+  onChunk: (text: string) => void,
+  onMetadata?: (metadata: any) => void
 ) => {
   const modelName = MODEL_MAPPING[tier];
   
@@ -142,6 +144,11 @@ export const streamChatResponse = async (
     // Inject recent history explicitly into prompt for "accessible memory"
     systemInstruction: buildSystemPrompt(settings, pastHistory),
   };
+  
+  // Conditional Google Search Grounding
+  if (enableSearch) {
+      config.tools = [{ googleSearch: {} }];
+  }
 
   // Thinking Config
   if (enableThinking && tier === ModelTier.REASONING) {
@@ -177,8 +184,15 @@ export const streamChatResponse = async (
 
   for await (const chunk of result) {
     const c = chunk as any;
+    
+    // Handle Text
     if (c.text) {
       onChunk(c.text);
+    }
+
+    // Handle Grounding Metadata (Search Results)
+    if (c.candidates?.[0]?.groundingMetadata && onMetadata) {
+        onMetadata(c.candidates[0].groundingMetadata);
     }
   }
 };

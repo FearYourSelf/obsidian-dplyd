@@ -2,11 +2,11 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { ChatState, Message, Role, ModelTier, AppConfig, Attachment, SavedChat, UserSettings } from './types';
 import { MODEL_MAPPING, TONES } from './constants';
 import { streamChatResponse } from './services/geminiService';
-import { loadSettings, saveSettings, loadChats, saveSingleChat, deleteChat, addMemory } from './services/storageService';
+import { loadSettings, saveSettings, loadChats, saveSingleChat, deleteChat, addMemory, archiveChat } from './services/storageService';
 import { MessageBubble } from './components/MessageBubble';
 import { LiveInterface } from './components/LiveInterface';
 import { Icon } from './components/Icon';
-import { Sidebar } from './components/Sidebar';
+import Sidebar from './components/Sidebar'; 
 import { SettingsModal } from './components/SettingsModal';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -48,6 +48,7 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showSaveToast, setShowSaveToast] = useState(false); 
   const [showMemoryToast, setShowMemoryToast] = useState(false); // New Memory Toast
+  const [isSearchEnabled, setIsSearchEnabled] = useState(false); // Search Toggle
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -176,6 +177,14 @@ const App: React.FC = () => {
       setUserSettings(newSettings);
       // Persist to storage
       saveSettings(newSettings);
+      
+      // Refresh chats in case settings (like archive all) changed them
+      setSavedChats(loadChats());
+  };
+  
+  const handleDataChange = () => {
+      // Called by SettingsModal when data is archived/deleted globally
+      setSavedChats(loadChats());
   };
 
   const handleToneChange = (newTone: string) => {
@@ -241,6 +250,7 @@ const App: React.FC = () => {
         userMessage.attachments || [],
         activeTier,
         thinkingEnabled,
+        isSearchEnabled,
         userSettings, 
         (chunk) => {
            accumulatedText += chunk;
@@ -252,6 +262,17 @@ const App: React.FC = () => {
                  : msg
              )
            }));
+        },
+        // Handle Grounding Metadata Callback
+        (metadata) => {
+            setChatState(prev => ({
+                ...prev,
+                messages: prev.messages.map(msg => 
+                  msg.id === modelMessageId 
+                    ? { ...msg, groundingMetadata: metadata } 
+                    : msg
+                )
+            }));
         }
       );
 
@@ -327,6 +348,15 @@ const App: React.FC = () => {
   const handleDeleteChat = (id: string, e: React.MouseEvent) => {
       e.stopPropagation();
       const updated = deleteChat(id);
+      setSavedChats(updated);
+      if (chatState.currentChatId === id) {
+          clearChat();
+      }
+  };
+
+  const handleArchiveChat = (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const updated = archiveChat(id);
       setSavedChats(updated);
       if (chatState.currentChatId === id) {
           clearChat();
@@ -558,6 +588,14 @@ const App: React.FC = () => {
                     >
                         <Icon name="mic" />
                     </button>
+
+                    <button 
+                        onClick={() => setIsSearchEnabled(!isSearchEnabled)}
+                        className={`p-2 transition-colors rounded-lg hover:bg-obsidian-800/50 ${isSearchEnabled ? 'text-blue-400' : 'text-obsidian-500 hover:text-white'}`}
+                        title={isSearchEnabled ? "Search Enabled" : "Enable Web Search"}
+                    >
+                        <Icon name="globe" />
+                    </button>
                 </div>
 
                 <textarea
@@ -603,6 +641,7 @@ const App: React.FC = () => {
           onSelectChat={loadChat}
           onNewChat={clearChat}
           onDeleteChat={handleDeleteChat}
+          onArchiveChat={handleArchiveChat}
       />
 
       {isSettingsOpen && (
@@ -610,6 +649,7 @@ const App: React.FC = () => {
              settings={userSettings}
              onSave={handleSettingsSave}
              onClose={() => setIsSettingsOpen(false)}
+             onDataChange={handleDataChange}
           />
       )}
 

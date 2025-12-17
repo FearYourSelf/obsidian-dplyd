@@ -1,4 +1,4 @@
-import { SavedChat, UserSettings, Memory } from '../types';
+import { SavedChat, UserSettings, Memory, Role } from '../types';
 
 const CHATS_KEY = 'obsidian_saved_chats';
 const SETTINGS_KEY = 'obsidian_user_settings';
@@ -75,6 +75,72 @@ export const deleteChat = (chatId: string) => {
 export const deleteAllChats = () => {
     localStorage.removeItem(CHATS_KEY);
 };
+
+// --- Archive Features ---
+
+export const archiveChat = (chatId: string) => {
+    const chats = loadChats();
+    const updated = chats.map(c => 
+        c.id === chatId ? { ...c, archived: true } : c
+    );
+    saveChats(updated);
+    return updated;
+};
+
+export const unarchiveChat = (chatId: string) => {
+    const chats = loadChats();
+    const updated = chats.map(c => 
+        c.id === chatId ? { ...c, archived: false } : c
+    );
+    saveChats(updated);
+    return updated;
+};
+
+export const archiveAllChats = () => {
+    const chats = loadChats();
+    const updated = chats.map(c => ({ ...c, archived: true }));
+    saveChats(updated);
+    return updated;
+};
+
+// --- Link Extraction ---
+export interface SharedLink {
+    url: string;
+    chatTitle: string;
+    timestamp: number;
+}
+
+export const extractSharedLinks = (): SharedLink[] => {
+    const chats = loadChats();
+    const links: SharedLink[] = [];
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+    chats.forEach(chat => {
+        chat.messages.forEach(msg => {
+            if (msg.role === Role.USER) {
+                const matches = msg.content.match(urlRegex);
+                if (matches) {
+                    matches.forEach(url => {
+                        // Avoid duplicates if user sent same link multiple times in same chat?
+                        // Let's keep them to show history for now, or distinct them.
+                        // Filter basic duplicates from list
+                        if(!links.some(l => l.url === url && l.chatTitle === chat.title)) {
+                            links.push({
+                                url: url,
+                                chatTitle: chat.title,
+                                timestamp: msg.timestamp
+                            });
+                        }
+                    });
+                }
+            }
+        });
+    });
+
+    // Sort by newest
+    return links.sort((a, b) => b.timestamp - a.timestamp);
+};
+
 
 // --- Memories ---
 export const loadMemories = (): Memory[] => {

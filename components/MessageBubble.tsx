@@ -60,6 +60,25 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
       setFeedback(prev => prev === type ? null : type);
   };
 
+  // Helper to extract clean chunks for rendering
+  const getGroundingSources = () => {
+      if (!message.groundingMetadata?.groundingChunks) return [];
+      
+      const chunks = message.groundingMetadata.groundingChunks;
+      const sources: { title: string; uri: string }[] = [];
+      
+      chunks.forEach((chunk: any) => {
+          if (chunk.web?.uri && chunk.web?.title) {
+              if (!sources.some(s => s.uri === chunk.web.uri)) {
+                  sources.push({ title: chunk.web.title, uri: chunk.web.uri });
+              }
+          }
+      });
+      return sources;
+  };
+
+  const sources = getGroundingSources();
+
   return (
     <div className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} py-6 animate-fade-in-up group`}>
       <div className={`max-w-3xl w-full flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
@@ -134,6 +153,30 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
           >
               {message.content}
           </ReactMarkdown>
+
+          {/* Grounding / Search Results */}
+          {!isUser && sources.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-obsidian-800/50">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-obsidian-500 mb-2 flex items-center gap-2">
+                    <div className="w-1 h-1 bg-obsidian-500 rounded-full"></div>
+                    Search Grounding
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    {sources.map((source, i) => (
+                        <a 
+                            key={i} 
+                            href={source.uri} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 px-3 py-1.5 bg-obsidian-900 border border-obsidian-800 rounded hover:border-obsidian-600 hover:text-white transition-colors text-xs text-obsidian-400 no-underline"
+                        >
+                            <span className="truncate max-w-[150px]">{source.title}</span>
+                            <Icon name="zap" className="w-2 h-2 opacity-50" /> {/* Reusing zap icon as external link indicator roughly */}
+                        </a>
+                    ))}
+                </div>
+            </div>
+          )}
           
           {/* Actions (Only for Model) */}
           {!isUser && !message.isStreaming && (

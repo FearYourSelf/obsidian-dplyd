@@ -1,30 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { UserSettings, Memory } from '../types';
+import { UserSettings, Memory, SavedChat } from '../types';
 import { VOICES } from '../constants';
 import { Icon } from './Icon';
 import { generateSpeech } from '../services/geminiService';
 import { getSharedAudioContext } from '../services/audioUtils';
-import { loadMemories, saveMemories, exportAllData, deleteAllChats, addMemory } from '../services/storageService';
+import { loadMemories, saveMemories, exportAllData, deleteAllChats, addMemory, extractSharedLinks, SharedLink, loadChats, unarchiveChat, deleteChat, archiveAllChats } from '../services/storageService';
 
 interface SettingsModalProps {
   settings: UserSettings;
   onSave: (settings: UserSettings) => void;
   onClose: () => void;
+  onDataChange: () => void; // New callback
 }
 
 type Tab = 'general' | 'personalization' | 'voice' | 'memory' | 'data';
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, onClose }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, onClose, onDataChange }) => {
   const [localSettings, setLocalSettings] = useState<UserSettings>(settings);
   const [activeTab, setActiveTab] = useState<Tab>('personalization');
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [newMemory, setNewMemory] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Data Tab States
+  const [sharedLinks, setSharedLinks] = useState<SharedLink[]>([]);
+  const [archivedChats, setArchivedChats] = useState<SavedChat[]>([]);
+  const [showArchived, setShowArchived] = useState(false); // Toggle view between controls and list
 
   useEffect(() => {
       setMemories(loadMemories());
-  }, []);
+      if (activeTab === 'data') {
+          setSharedLinks(extractSharedLinks());
+          setArchivedChats(loadChats().filter(c => c.archived));
+      }
+  }, [activeTab]);
 
   const handleChange = (field: keyof UserSettings, value: any) => {
     setLocalSettings(prev => ({ ...prev, [field]: value }));
@@ -80,7 +90,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, 
   const handleDeleteAllChats = () => {
       if(confirm("Are you sure? This will delete all your conversation history locally.")) {
           deleteAllChats();
-          alert("All chats deleted.");
+          setArchivedChats([]);
+          onDataChange(); // Notify App
+      }
+  };
+
+  const handleArchiveAll = () => {
+      if (confirm("Archive all active chats?")) {
+          archiveAllChats();
+          setArchivedChats(loadChats().filter(c => c.archived));
+          onDataChange(); // Notify App
+      }
+  };
+
+  const handleUnarchive = (id: string) => {
+      unarchiveChat(id);
+      setArchivedChats(prev => prev.filter(c => c.id !== id));
+      onDataChange(); // Notify App
+  };
+
+  const handlePermanentDelete = (id: string) => {
+      if(confirm("Delete this chat permanently?")) {
+          deleteChat(id);
+          setArchivedChats(prev => prev.filter(c => c.id !== id));
+          onDataChange(); // Notify App
       }
   };
 
@@ -294,37 +327,115 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, 
                     <h3 className="text-lg font-light mb-6">Data controls</h3>
                     
                     {/* Improve Model Toggle */}
-                    <div className="flex items-center justify-between py-4 border-b border-obsidian-800">
-                        <span className="text-sm font-medium">Improve the model for everyone</span>
-                        <button 
-                            onClick={() => handleChange('allowTraining', !localSettings.allowTraining)}
-                            className="flex items-center gap-2 text-sm text-obsidian-400 hover:text-white"
-                        >
-                            {localSettings.allowTraining ? 'On' : 'Off'}
-                            <Icon name="play" className="w-3 h-3 rotate-90" /> {/* Chevron placeholder */}
-                        </button>
+                    <div className="py-4 border-b border-obsidian-800">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">Improve the model for everyone</span>
+                            <button 
+                                onClick={() => handleChange('allowTraining', !localSettings.allowTraining)}
+                                className={`flex items-center gap-2 text-sm transition-colors ${localSettings.allowTraining ? 'text-green-500' : 'text-obsidian-400 hover:text-white'}`}
+                            >
+                                {localSettings.allowTraining ? 'On' : 'Off'}
+                                <Icon name="play" className={`w-3 h-3 transition-transform ${localSettings.allowTraining ? 'rotate-[-90deg]' : 'rotate-90'}`} />
+                            </button>
+                        </div>
+                        
+                        {/* Privacy Warning */}
+                        {localSettings.allowTraining && (
+                            <div className="mt-3 p-3 bg-blue-900/20 border border-blue-900/50 rounded flex items-start gap-3 animate-fade-in-up">
+                                <Icon name="shield" className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                                <div>
+                                    <p className="text-xs text-blue-200 font-medium">Encrypted & Secure</p>
+                                    <p className="text-[10px] text-blue-300/70 mt-1 leading-relaxed">
+                                        Your data is encrypted at rest and securely stored. We strip personally identifiable information (PII) before any training process. You can revoke this permission at any time.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Shared Links */}
-                    <div className="flex items-center justify-between py-4 border-b border-obsidian-800">
-                        <span className="text-sm">Shared links</span>
-                        <button className="px-4 py-1.5 rounded-full border border-obsidian-700 text-xs font-medium hover:bg-obsidian-800 transition-colors" onClick={() => alert("Sharing features coming soon.")}>
-                            Manage
-                        </button>
+                    <div className="py-4 border-b border-obsidian-800">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm">Shared links</span>
+                            <span className="text-xs text-obsidian-500">{sharedLinks.length} found</span>
+                        </div>
+                        {sharedLinks.length > 0 ? (
+                             <div className="max-h-32 overflow-y-auto space-y-2 pr-1 ghost-scrollbar">
+                                 {sharedLinks.map((link, i) => (
+                                     <a 
+                                        key={i} 
+                                        href={link.url} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-3 p-2 rounded bg-obsidian-950 border border-obsidian-800 hover:border-obsidian-600 group transition-colors no-underline"
+                                     >
+                                         <div className="p-1.5 bg-obsidian-900 rounded text-obsidian-400 group-hover:text-white">
+                                             <Icon name="external-link" className="w-3 h-3" />
+                                         </div>
+                                         <div className="flex-1 min-w-0">
+                                             <p className="text-xs text-obsidian-300 truncate">{link.url}</p>
+                                             <p className="text-[9px] text-obsidian-600 truncate">From: {link.chatTitle}</p>
+                                         </div>
+                                     </a>
+                                 ))}
+                             </div>
+                        ) : (
+                            <p className="text-xs text-obsidian-600 italic">No shared links detected in your history.</p>
+                        )}
                     </div>
 
-                    {/* Archived Chats */}
-                    <div className="flex items-center justify-between py-4 border-b border-obsidian-800">
-                        <span className="text-sm">Archived chats</span>
-                        <button className="px-4 py-1.5 rounded-full border border-obsidian-700 text-xs font-medium hover:bg-obsidian-800 transition-colors" onClick={() => alert("Archive feature coming soon.")}>
-                            Manage
-                        </button>
+                    {/* Archived Chats Toggle */}
+                    <div className="py-4 border-b border-obsidian-800">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm">Archived chats</span>
+                            <button 
+                                onClick={() => setShowArchived(!showArchived)}
+                                className="px-4 py-1.5 rounded-full border border-obsidian-700 text-xs font-medium hover:bg-obsidian-800 transition-colors"
+                            >
+                                {showArchived ? 'Hide' : 'Manage'}
+                            </button>
+                        </div>
+
+                        {showArchived && (
+                            <div className="mt-4 animate-fade-in-up">
+                                {archivedChats.length === 0 ? (
+                                    <p className="text-xs text-obsidian-600 italic">No archived chats.</p>
+                                ) : (
+                                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1 ghost-scrollbar">
+                                        {archivedChats.map(chat => (
+                                            <div key={chat.id} className="flex items-center justify-between p-2 bg-obsidian-950 border border-obsidian-800 rounded">
+                                                <span className="text-xs text-obsidian-300 truncate max-w-[150px]">{chat.title}</span>
+                                                <div className="flex gap-2">
+                                                    <button 
+                                                        onClick={() => handleUnarchive(chat.id)}
+                                                        className="p-1 text-obsidian-500 hover:text-green-500 hover:bg-obsidian-900 rounded"
+                                                        title="Restore"
+                                                    >
+                                                        <Icon name="unarchive" className="w-3 h-3" />
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handlePermanentDelete(chat.id)}
+                                                        className="p-1 text-obsidian-500 hover:text-red-500 hover:bg-obsidian-900 rounded"
+                                                        title="Delete Permanently"
+                                                    >
+                                                        <Icon name="trash" className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Archive All */}
                     <div className="flex items-center justify-between py-4 border-b border-obsidian-800">
                         <span className="text-sm">Archive all chats</span>
-                        <button className="px-4 py-1.5 rounded-full border border-obsidian-700 text-xs font-medium hover:bg-obsidian-800 transition-colors" onClick={() => alert("Archive feature coming soon.")}>
+                        <button 
+                             onClick={handleArchiveAll}
+                             className="px-4 py-1.5 rounded-full border border-obsidian-700 text-xs font-medium hover:bg-obsidian-800 transition-colors"
+                        >
                             Archive all
                         </button>
                     </div>

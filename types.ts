@@ -26,6 +26,7 @@ export interface Message {
   isStreaming?: boolean;
   attachments?: Attachment[];
   thinking?: boolean;
+  groundingMetadata?: any; // New field for search results
 }
 
 export interface ChatState {
@@ -55,7 +56,7 @@ export interface UserSettings {
   aboutUser: string; // Legacy field
   customInstructions: string;
   voice: string;
-  accent: 'australian' | 'american' | 'british' | 'italian'; // Updated field
+  accent: 'australian' | 'american' | 'british' | 'italian'; 
   tone: string;
   
   // Language
@@ -71,4 +72,5 @@ export interface SavedChat {
   title: string;
   messages: Message[];
   timestamp: number;
+  archived?: boolean; // New Flag
 }
