@@ -66,8 +66,8 @@ export const LiveInterface: React.FC<LiveInterfaceProps> = ({ onClose, settings 
   return (
     <div className="fixed inset-0 z-50 bg-obsidian-950 flex flex-col items-center justify-center animate-fade-in">
       
-      {/* Background Pulse for "Active but Locked" feel */}
-      <div className={`absolute inset-0 opacity-10 pointer-events-none transition-colors duration-1000 ${isUnhinged ? 'bg-red-900' : 'bg-white'} ${status === 'connected' ? 'animate-pulse' : ''}`}></div>
+      {/* Background layer: Removed animate-pulse to prevent distraction */}
+      <div className={`absolute inset-0 opacity-5 pointer-events-none transition-colors duration-1000 ${isUnhinged ? 'bg-red-900' : 'bg-obsidian-400'}`}></div>
 
       {/* Visualizer */}
       <div className="relative w-64 h-64 flex items-center justify-center">
