@@ -13,6 +13,7 @@ export const LiveInterface: React.FC<LiveInterfaceProps> = ({ onClose, settings 
   const [audioLevel, setAudioLevel] = useState(0);
   const liveRef = useRef<ObsidianLive | null>(null);
   const wakeLockRef = useRef<any>(null);
+  const [wakeLockSupported, setWakeLockSupported] = useState(true);
 
   // Function to request Screen Wake Lock
   const requestWakeLock = async () => {
@@ -25,9 +26,17 @@ export const LiveInterface: React.FC<LiveInterfaceProps> = ({ onClose, settings 
         wakeLockRef.current.addEventListener('release', () => {
           console.log('Obsidian: Screen Wake Lock Released');
         });
+      } else {
+        setWakeLockSupported(false);
       }
     } catch (err: any) {
-      console.error(`${err.name}, ${err.message}`);
+      // Gracefully handle policy restrictions or browser denials
+      if (err.name === 'NotAllowedError') {
+        console.warn('Obsidian: Screen Wake Lock disallowed by permissions policy. Device may auto-lock, but connection persists.');
+      } else {
+        console.error('Obsidian: Wake Lock Error', err);
+      }
+      setWakeLockSupported(false);
     }
   };
 
@@ -43,7 +52,7 @@ export const LiveInterface: React.FC<LiveInterfaceProps> = ({ onClose, settings 
 
     // Re-acquire wake lock if page becomes visible again
     const handleVisibilityChange = async () => {
-      if (wakeLockRef.current !== null && document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible') {
         await requestWakeLock();
       }
     };
@@ -53,7 +62,7 @@ export const LiveInterface: React.FC<LiveInterfaceProps> = ({ onClose, settings 
       liveRef.current?.disconnect();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (wakeLockRef.current) {
-        wakeLockRef.current.release();
+        wakeLockRef.current.release().catch(() => {});
         wakeLockRef.current = null;
       }
     };
@@ -66,7 +75,7 @@ export const LiveInterface: React.FC<LiveInterfaceProps> = ({ onClose, settings 
   return (
     <div className="fixed inset-0 z-50 bg-obsidian-950 flex flex-col items-center justify-center animate-fade-in">
       
-      {/* Background layer: Removed animate-pulse to prevent distraction */}
+      {/* Background layer */}
       <div className={`absolute inset-0 opacity-5 pointer-events-none transition-colors duration-1000 ${isUnhinged ? 'bg-red-900' : 'bg-obsidian-400'}`}></div>
 
       {/* Visualizer */}
@@ -105,8 +114,10 @@ export const LiveInterface: React.FC<LiveInterfaceProps> = ({ onClose, settings 
             </p>
             {status === 'connected' && (
                 <div className="flex items-center gap-2 px-3 py-1 bg-obsidian-900/50 border border-obsidian-800 rounded-full">
-                    <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse"></div>
-                    <span className="text-[10px] font-mono text-obsidian-400 uppercase tracking-tighter">Stay-Awake Protocol Engaged</span>
+                    <div className={`w-1 h-1 rounded-full animate-pulse ${wakeLockSupported ? 'bg-blue-400' : 'bg-obsidian-600'}`}></div>
+                    <span className="text-[10px] font-mono text-obsidian-400 uppercase tracking-tighter">
+                        {wakeLockSupported ? 'Stay-Awake Protocol Engaged' : 'Background Audio Active'}
+                    </span>
                 </div>
             )}
         </div>
