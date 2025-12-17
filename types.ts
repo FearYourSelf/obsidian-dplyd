@@ -8,7 +8,8 @@ export enum Role {
 export enum ModelTier {
   FAST = 'fast',        // Flash-Lite
   BALANCED = 'balanced',// Flash
-  REASONING = 'reasoning' // Pro
+  // Reasoning deprecated to prevent 503 errors
+  REASONING = 'reasoning' 
 }
 
 export interface Attachment {
@@ -26,7 +27,7 @@ export interface Message {
   isStreaming?: boolean;
   attachments?: Attachment[];
   thinking?: boolean;
-  groundingMetadata?: any; // New field for search results
+  groundingMetadata?: any; 
 }
 
 export interface ChatState {
@@ -39,7 +40,7 @@ export interface ChatState {
 
 export interface AppConfig {
   modelTier: ModelTier;
-  enableThinking: boolean;
+  // enableThinking removed
 }
 
 export interface Memory {
@@ -72,5 +73,5 @@ export interface SavedChat {
   title: string;
   messages: Message[];
   timestamp: number;
-  archived?: boolean; // New Flag
+  archived?: boolean; 
 }

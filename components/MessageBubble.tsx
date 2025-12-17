@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -25,6 +25,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const [isThinkingOpen, setIsThinkingOpen] = useState(false);
 
+  // Audio Refs for cancellation
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  const isCancelledRef = useRef(false);
+
   // Extract Thoughts from content
   const thoughtRegex = /\[\[THOUGHT\]\]([\s\S]*?)\[\[\/THOUGHT\]\]/;
   const thoughtMatch = message.content.match(thoughtRegex);
@@ -37,30 +41,76 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
     setTimeout(() => setShowCopied(false), 2000);
   };
 
+  const stopAudio = () => {
+    isCancelledRef.current = true;
+    activeSourcesRef.current.forEach(source => {
+        try { source.stop(); } catch(e){}
+    });
+    activeSourcesRef.current = [];
+    setIsPlaying(false);
+    setIsGenerating(false);
+  };
+
   const handleSpeak = async () => {
-    if (isPlaying || isGenerating) return;
-    
+    if (isPlaying || isGenerating) {
+        stopAudio();
+        return;
+    }
+
+    setIsPlaying(true);
     setIsGenerating(true);
+    isCancelledRef.current = false;
     
-    setTimeout(async () => {
-        const voice = userSettings?.voice || 'Zephyr';
-        const accent = userSettings?.accent || 'australian';
-        
-        const audioBuffer = await generateSpeech(displayContent, voice, accent);
-        setIsGenerating(false);
-        
-        if (audioBuffer) {
-            setIsPlaying(true);
-            const ctx = getSharedAudioContext();
-            const source = ctx.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(ctx.destination);
-            source.start(0);
-            source.onended = () => setIsPlaying(false);
-        } else {
-            console.error("Failed to generate speech");
-        }
-    }, 10);
+    // Chunking Logic: Split by sentence to play audio faster (low latency)
+    // Splits by period/question/exclamation followed by space or end of line.
+    const chunks = displayContent.match(/[^.!?\n]+[.!?\n]+["']?|.+/g) || [displayContent];
+    
+    const ctx = getSharedAudioContext();
+    let nextStartTime = ctx.currentTime;
+    
+    const voice = userSettings?.voice || 'Zephyr';
+    const accent = userSettings?.accent || 'australian';
+
+    for (let i = 0; i < chunks.length; i++) {
+         if (isCancelledRef.current) break;
+         
+         const chunk = chunks[i].trim();
+         if (!chunk) continue;
+
+         // Fetch audio for this chunk
+         const buffer = await generateSpeech(chunk, voice, accent);
+         
+         if (isCancelledRef.current) break;
+         
+         if (buffer) {
+             // As soon as the first chunk arrives, stop the spinner
+             setIsGenerating(false); 
+             
+             const source = ctx.createBufferSource();
+             source.buffer = buffer;
+             source.connect(ctx.destination);
+             
+             // Schedule to play immediately after previous or now if previous finished
+             const start = Math.max(ctx.currentTime, nextStartTime);
+             source.start(start);
+             nextStartTime = start + buffer.duration;
+             
+             activeSourcesRef.current.push(source);
+         }
+    }
+    
+    // Determine when the entire playback finishes to toggle the icon back
+    const timeLeft = (nextStartTime - ctx.currentTime) * 1000;
+    if (timeLeft > 0) {
+        setTimeout(() => {
+            if (!isCancelledRef.current) {
+                setIsPlaying(false);
+                activeSourcesRef.current = [];
+            }
+        }, timeLeft + 100); // Small buffer
+    } else {
+        setIsPlaying(false);
+    }
   };
 
   const handleFeedback = (type: 'up' | 'down') => {
@@ -234,14 +284,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
                 <button 
                   onClick={handleSpeak} 
                   className={`flex items-center gap-1.5 text-[10px] font-mono tracking-wider uppercase transition-colors p-2 rounded hover:bg-obsidian-900/50 ${isPlaying || isGenerating ? 'text-white' : 'text-obsidian-500 hover:text-white'}`}
-                  title="Read Aloud"
+                  title={isPlaying ? "Stop Speaking" : "Read Aloud"}
                 >
                     {isGenerating ? (
                         <div className="w-3 h-3 border-2 border-obsidian-500 border-t-white rounded-full animate-spin"></div>
                     ) : (
                         <div className="relative">
                             <div className={`${isPlaying ? 'animate-pulse text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : ''}`}>
-                                <Icon name="volume" className="w-3 h-3" />
+                                <Icon name={isPlaying ? "stop" : "volume"} className="w-3 h-3" />
                             </div>
                         </div>
                     )}

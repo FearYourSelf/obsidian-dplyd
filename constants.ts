@@ -31,7 +31,8 @@ Help the user think better and build faster. Provide signal, not noise.`;
 export const MODEL_MAPPING = {
   [ModelTier.FAST]: 'gemini-flash-lite-latest',
   [ModelTier.BALANCED]: 'gemini-2.5-flash',
-  [ModelTier.REASONING]: 'gemini-3-pro-preview',
+  // Fallback reasoning to balanced to prevent crashes if old state persists
+  [ModelTier.REASONING]: 'gemini-2.5-flash', 
 };
 
 export const AUDIO_MODEL = 'gemini-2.5-flash-native-audio-preview-09-2025';
