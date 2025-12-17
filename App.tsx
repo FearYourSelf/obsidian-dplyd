@@ -8,19 +8,12 @@ import { LiveInterface } from './components/LiveInterface';
 import { Icon } from './components/Icon';
 import Sidebar from './components/Sidebar'; 
 import { SettingsModal } from './components/SettingsModal';
+import { DebugConsole } from './components/DebugConsole';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-// Heuristic to detect complexity
-const detectComplexity = (text: string): boolean => {
-    const complexKeywords = ['analyze', 'code', 'python', 'javascript', 'plan', 'architecture', 'design pattern', 'math', 'physics', 'why', 'compare', 'generate'];
-    const lower = text.toLowerCase();
-    return text.length > 150 || complexKeywords.some(kw => lower.includes(kw));
-};
-
 const SLASH_COMMANDS = [
     { cmd: '/reset', desc: 'Clear current chat' },
-    { cmd: '/think', desc: 'Toggle reasoning mode' },
     { cmd: '/search', desc: 'Toggle web search' },
     { cmd: '/image', desc: 'Generate images info' },
     { cmd: '/archive', desc: 'Archive this chat' },
@@ -40,7 +33,7 @@ const App: React.FC = () => {
 
   const [config, setConfig] = useState<AppConfig>({
     modelTier: ModelTier.BALANCED,
-    enableThinking: false
+    // enableThinking removed
   });
 
   // Data State
@@ -50,13 +43,13 @@ const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const [autoEscalated, setAutoEscalated] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showSaveToast, setShowSaveToast] = useState(false); 
   const [showMemoryToast, setShowMemoryToast] = useState(false);
   const [isSearchEnabled, setIsSearchEnabled] = useState(false);
   const [isStudyDropdownOpen, setIsStudyDropdownOpen] = useState(false);
+  const [isDebugOpen, setIsDebugOpen] = useState(false);
   
   // Slash Command State
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
@@ -99,6 +92,12 @@ const App: React.FC = () => {
             e.preventDefault();
             clearChat();
             inputRef.current?.focus();
+        }
+
+        // Debug Console Shortcut: Ctrl + ' 
+        if ((e.ctrlKey && e.key === "'")) {
+            e.preventDefault();
+            setIsDebugOpen(prev => !prev);
         }
     };
 
@@ -294,9 +293,6 @@ const App: React.FC = () => {
           case '/reset':
               clearChat();
               break;
-          case '/think':
-              toggleModel();
-              break;
           case '/search':
               setIsSearchEnabled(prev => !prev);
               break;
@@ -362,19 +358,12 @@ const App: React.FC = () => {
   // Logic extracted to support both new messages and regeneration
   const processMessage = async (msgContent: string, msgAttachments: Attachment[], history: Message[]) => {
       stopGenerationRef.current = false;
-      setAutoEscalated(false);
 
       const modelMessageId = generateId();
       let activeTier = config.modelTier;
-      let thinkingEnabled = config.enableThinking;
+      let thinkingEnabled = false;
 
-      if (config.modelTier === ModelTier.BALANCED && !config.enableThinking) {
-          if (detectComplexity(msgContent) || msgAttachments?.length > 0) {
-              activeTier = ModelTier.REASONING;
-              thinkingEnabled = true;
-              setAutoEscalated(true);
-          }
-      }
+      // Note: Auto-Escalation removed. Always rely on Fast or Balanced.
       
       setChatState(prev => ({
         ...prev,
@@ -517,7 +506,6 @@ const App: React.FC = () => {
 
   const clearChat = () => {
     setChatState({ messages: [], isLoading: false, error: null, mode: 'chat', currentChatId: null });
-    setAutoEscalated(false);
     autoScrollEnabledRef.current = true; // Reset scroll
   };
 
@@ -552,14 +540,13 @@ const App: React.FC = () => {
 
   const toggleModel = () => {
       setConfig(prev => {
+          // Cycle: Fast -> Balanced -> Fast
           if (prev.modelTier === ModelTier.FAST) return { ...prev, modelTier: ModelTier.BALANCED };
-          if (prev.modelTier === ModelTier.BALANCED) return { ...prev, modelTier: ModelTier.REASONING, enableThinking: true };
-          return { ...prev, modelTier: ModelTier.FAST, enableThinking: false };
+          return { ...prev, modelTier: ModelTier.FAST };
       });
   };
 
   const getModelLabel = () => {
-      if (config.enableThinking) return "Think Harder";
       if (config.modelTier === ModelTier.FAST) return "Quick";
       return "Balanced";
   };
@@ -595,6 +582,9 @@ const App: React.FC = () => {
   return (
     <div className={`flex flex-col h-screen font-sans overflow-hidden selection:bg-obsidian-700 selection:text-white relative transition-colors duration-1000 ${isUnhinged ? 'bg-[#050000]' : 'bg-obsidian-950'} text-obsidian-200`}>
       
+      {/* DEBUG CONSOLE OVERLAY */}
+      <DebugConsole isOpen={isDebugOpen} onClose={() => setIsDebugOpen(false)} />
+
       <div className="bg-noise absolute inset-0 z-0 opacity-[0.03]"></div>
       
       {isItalian ? (
@@ -655,7 +645,7 @@ const App: React.FC = () => {
                 onClick={toggleModel}
                 className="text-[10px] font-mono uppercase tracking-widest text-obsidian-500 hover:text-white transition-colors flex items-center gap-2"
             >
-                <Icon name={config.enableThinking ? "cpu" : "zap"} className="w-3 h-3" />
+                <Icon name="zap" className="w-3 h-3" />
                 <span className="hidden sm:inline">{getModelLabel()}</span>
             </button>
             
@@ -719,28 +709,13 @@ const App: React.FC = () => {
                     <MessageBubble 
                       message={msg} 
                       userSettings={userSettings} 
-                      tier={config.enableThinking ? ModelTier.REASONING : config.modelTier}
+                      tier={config.modelTier}
                       onRegenerate={handleRegenerate}
                       onImageClick={setLightboxImage}
                     />
                 </React.Fragment>
               ))}
               
-              <div className="ml-4 mt-2 mb-10 h-6">
-                {chatState.isLoading && chatState.messages.length > 0 && chatState.messages[chatState.messages.length-1].thinking && (
-                    <div className="text-[10px] text-obsidian-500 font-mono animate-pulse flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 bg-obsidian-500 rounded-full animate-bounce"></div>
-                        PROCESSING COMPLEX LOGIC
-                    </div>
-                )}
-                {!chatState.isLoading && autoEscalated && (
-                     <div className="text-[10px] text-obsidian-600 font-mono flex items-center gap-2 animate-fade-in-up">
-                        <Icon name="zap" className="w-3 h-3" />
-                        AUTO-ESCALATED TO THINK HARDER
-                    </div>
-                )}
-              </div>
-
               {chatState.error && (
                 <div className="mt-8 mb-8 p-4 border border-red-900/30 bg-obsidian-900/50 text-red-500 text-xs font-mono text-center tracking-widest uppercase rounded animate-fade-in-up">
                     {chatState.error}
