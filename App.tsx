@@ -20,7 +20,6 @@ const detectComplexity = (text: string): boolean => {
 
 const App: React.FC = () => {
   // --- State ---
-  // FIX: Lazy initialization ensures loadSettings is called only once and correctly on mount
   const [userSettings, setUserSettings] = useState<UserSettings>(() => loadSettings());
   
   const [chatState, setChatState] = useState<ChatState>({
@@ -47,14 +46,18 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showSaveToast, setShowSaveToast] = useState(false); 
-  const [showMemoryToast, setShowMemoryToast] = useState(false); // New Memory Toast
-  const [isSearchEnabled, setIsSearchEnabled] = useState(false); // Search Toggle
+  const [showMemoryToast, setShowMemoryToast] = useState(false);
+  const [isSearchEnabled, setIsSearchEnabled] = useState(false);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  
+  // SCROLLING LOGIC REF
+  // We track this manually to decouple render cycles from scroll intent
+  const autoScrollEnabledRef = useRef(true);
 
   // --- Effects ---
 
@@ -62,7 +65,6 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => e.preventDefault();
     const handleKeyDown = (e: KeyboardEvent) => {
-        // Prevention
         if (
             e.key === 'F12' || 
             (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) || 
@@ -71,7 +73,6 @@ const App: React.FC = () => {
             e.preventDefault();
         }
 
-        // Feature Shortcuts
         if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
             e.preventDefault();
             clearChat();
@@ -93,46 +94,28 @@ const App: React.FC = () => {
     setSavedChats(loadChats());
   }, []);
 
-  // SCROLL LOCK ENGINE
-  // Use useLayoutEffect to update scroll position synchronously after DOM mutations but before paint
+  // SCROLL LOCK ENGINE v2.0 (The Ultimate Fix)
   useLayoutEffect(() => {
-    const lastMsg = chatState.messages[chatState.messages.length - 1];
-    const isStreaming = lastMsg?.isStreaming;
+    const container = scrollContainerRef.current;
+    if (!container) return;
 
-    if (scrollContainerRef.current) {
-        if (isStreaming) {
-            // Force instant scroll without animation during streaming
-            // 'overflowAnchor: none' is the MAGIC FIX for drifting content in modern browsers
-            scrollContainerRef.current.style.scrollBehavior = 'auto';
-            scrollContainerRef.current.style.overflowAnchor = 'none'; 
-            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-        } else {
-             // Re-enable smooth scrolling for manual user actions or new messages
-             scrollContainerRef.current.style.scrollBehavior = 'smooth';
-             scrollContainerRef.current.style.overflowAnchor = 'auto'; 
-             
-             // Check if we are close to bottom or if it's a fresh message
-             const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-             const isNearBottom = scrollHeight - scrollTop - clientHeight < 300;
-             
-             if (isNearBottom || lastMsg?.role === Role.USER) {
-                 scrollToBottom(true);
-             }
-        }
+    // If auto-scroll is enabled (user hasn't scrolled up), snap to bottom instantly
+    if (autoScrollEnabledRef.current) {
+        // Disable scroll behavior for instant snap, preventing drift/jitter
+        container.style.scrollBehavior = 'auto'; 
+        container.scrollTop = container.scrollHeight;
     }
-  }, [chatState.messages]);
+  }, [chatState.messages]); // Runs synchronously after every message update
 
   // Auto-save chat when messages change
   useEffect(() => {
     if (chatState.messages.length > 0) {
       const chatId = chatState.currentChatId || generateId();
       
-      // If new chat, set ID
       if (!chatState.currentChatId) {
           setChatState(prev => ({ ...prev, currentChatId: chatId }));
       }
 
-      // Generate simple title from first message
       let title = "New Conversation";
       const firstUserMsg = chatState.messages.find(m => m.role === Role.USER);
       if (firstUserMsg) {
@@ -147,9 +130,8 @@ const App: React.FC = () => {
       };
       
       saveSingleChat(chatToSave);
-      setSavedChats(loadChats()); // Refresh list
+      setSavedChats(loadChats()); 
 
-      // Trigger Toast
       setShowSaveToast(true);
       const timer = setTimeout(() => setShowSaveToast(false), 2000);
       return () => clearTimeout(timer);
@@ -160,30 +142,35 @@ const App: React.FC = () => {
 
   const scrollToBottom = (smooth = true) => {
     if (scrollContainerRef.current) {
-        // Enforce smooth behavior programmatically if requested
         scrollContainerRef.current.style.scrollBehavior = smooth ? 'smooth' : 'auto';
-        messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+        
+        // Re-enable sticky scroll if user manually clicked the button
+        autoScrollEnabledRef.current = true;
+        setShowScrollButton(false);
     }
   };
 
   const handleScroll = (e: React.UIEvent<HTMLElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 200;
-    setShowScrollButton(!isNearBottom);
+    
+    // Threshold to detect if user is at the bottom
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+    
+    // Update the ref. If at bottom, enable stickiness. If not, disable it.
+    autoScrollEnabledRef.current = isAtBottom;
+    
+    // Show/Hide button based on position
+    setShowScrollButton(!isAtBottom);
   };
 
   const handleSettingsSave = (newSettings: UserSettings) => {
-      // Immediate state update
       setUserSettings(newSettings);
-      // Persist to storage
       saveSettings(newSettings);
-      
-      // Refresh chats in case settings (like archive all) changed them
       setSavedChats(loadChats());
   };
   
   const handleDataChange = () => {
-      // Called by SettingsModal when data is archived/deleted globally
       setSavedChats(loadChats());
   };
 
@@ -194,6 +181,10 @@ const App: React.FC = () => {
 
   const handleSendMessage = async () => {
     if ((!input.trim() && attachments.length === 0) || chatState.isLoading) return;
+
+    // User interaction forces scroll to bottom
+    autoScrollEnabledRef.current = true;
+    scrollToBottom(true);
 
     const userMessage: Message = {
       id: generateId(),
@@ -216,7 +207,6 @@ const App: React.FC = () => {
 
     const modelMessageId = generateId();
 
-    // Determine tier logic
     let activeTier = config.modelTier;
     let thinkingEnabled = config.enableThinking;
 
@@ -228,7 +218,6 @@ const App: React.FC = () => {
         }
     }
     
-    // Optimistic Model Message
     setChatState(prev => ({
       ...prev,
       messages: [...prev.messages, {
@@ -263,7 +252,6 @@ const App: React.FC = () => {
              )
            }));
         },
-        // Handle Grounding Metadata Callback
         (metadata) => {
             setChatState(prev => ({
                 ...prev,
@@ -276,7 +264,6 @@ const App: React.FC = () => {
         }
       );
 
-      // Post-Processing: Extract Memories
       let finalText = accumulatedText;
       const memoryRegex = /\[\[MEMORY: (.*?)\]\]/g;
       const memoriesFound: string[] = [];
@@ -285,10 +272,8 @@ const App: React.FC = () => {
           memoriesFound.push(match[1]);
       }
 
-      // Save memories if found
       if (memoriesFound.length > 0) {
           memoriesFound.forEach(mem => addMemory(mem, 'auto'));
-          // Remove memory tags from displayed text
           finalText = accumulatedText.replace(memoryRegex, '').trim();
           setShowMemoryToast(true);
           setTimeout(() => setShowMemoryToast(false), 3000);
@@ -333,6 +318,7 @@ const App: React.FC = () => {
   const clearChat = () => {
     setChatState({ messages: [], isLoading: false, error: null, mode: 'chat', currentChatId: null });
     setAutoEscalated(false);
+    autoScrollEnabledRef.current = true; // Reset scroll
   };
 
   const loadChat = (chat: SavedChat) => {
@@ -343,6 +329,7 @@ const App: React.FC = () => {
           mode: 'chat',
           currentChatId: chat.id
       });
+      autoScrollEnabledRef.current = true; // Reset scroll
   };
 
   const handleDeleteChat = (id: string, e: React.MouseEvent) => {
@@ -383,17 +370,15 @@ const App: React.FC = () => {
   return (
     <div className={`flex flex-col h-screen font-sans overflow-hidden selection:bg-obsidian-700 selection:text-white relative transition-colors duration-1000 ${isUnhinged ? 'bg-[#050000]' : 'bg-obsidian-950'} text-obsidian-200`}>
       
-      {/* Backgrounds - Boosted Visibility */}
       <div className="bg-noise absolute inset-0 z-0 opacity-[0.03]"></div>
       
-      {/* Dynamic Background */}
       {isItalian ? (
          <div className="absolute inset-0 z-0 bg-gradient-to-r from-[#008C45]/20 via-transparent to-[#CD212A]/20 opacity-80 pointer-events-none animate-fade-in"></div>
       ) : (
          <div className={`absolute inset-0 z-0 bg-gradient-radial opacity-90 animate-aurora pointer-events-none ${isUnhinged ? 'from-[#1a0000] via-[#050000] to-[#000000]' : 'from-obsidian-900 via-obsidian-950 to-obsidian-950'}`}></div>
       )}
 
-      {/* Header - Fixed Position */}
+      {/* Header */}
       <header className={`fixed top-0 left-0 right-0 h-16 flex items-center justify-between px-4 sm:px-6 z-50 backdrop-blur-md border-b transition-colors duration-500 ${isUnhinged ? 'bg-[#050000]/90 border-red-900/20' : 'bg-gradient-to-b from-obsidian-950 to-obsidian-950/90 border-white/5'}`}>
         <div className="flex items-center gap-3 sm:gap-4">
             <button onClick={() => setIsSidebarOpen(true)} className="text-obsidian-500 hover:text-white transition-colors">
@@ -410,7 +395,6 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4">
-             {/* Tone Selector in Header - Wrapper ensures correct positioning */}
             <div className="relative group flex items-center">
                 <select 
                     value={userSettings.tone}
@@ -422,7 +406,6 @@ const App: React.FC = () => {
                         <option key={t} value={t} className="bg-obsidian-900 text-obsidian-300">{t}</option>
                     ))}
                 </select>
-                {/* Manual Chevron for visibility */}
                 <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-obsidian-600">
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </div>
@@ -450,61 +433,69 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Chat Area - Scrollable with padding for header */}
+      {/* Main Chat Area 
+          CHANGED: justify-end removed. mt-auto added to inner wrapper to handle bottom alignment.
+          CHANGED: style={{ overflowAnchor: 'none' }} added to container to prevent browser fighting.
+      */}
       <main 
         className="ghost-scrollbar flex-1 h-screen overflow-y-auto px-4 sm:px-0 z-10 pt-16 relative" 
         ref={scrollContainerRef}
         onScroll={handleScroll}
+        style={{ overflowAnchor: 'none' }}
       >
-        <div className="max-w-3xl mx-auto min-h-full flex flex-col justify-end pb-40 pt-10 relative">
+        <div className="max-w-3xl mx-auto min-h-full flex flex-col pb-40 pt-10 relative">
           
-          {chatState.messages.length === 0 && (
-             <div className="flex-1 flex flex-col items-center justify-center opacity-30 select-none pb-20 animate-fade-in-up">
-                <div className={`w-20 h-20 border rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(0,0,0,0.5)] ${isUnhinged ? 'border-red-900/50 bg-red-950/10' : 'border-obsidian-800'}`}>
-                    <Icon name="cpu" className={`w-6 h-6 ${isUnhinged ? 'text-red-600' : 'text-obsidian-600'}`} />
-                </div>
-                <p className="text-xs tracking-[0.3em] uppercase">
-                    {isItalian ? 'System is Italian' : 'System Online'}
-                </p>
-                <p className="text-[10px] text-obsidian-600 mt-2 font-mono">NSD-CORE/70B • Ready</p>
-                <p className="text-[9px] text-obsidian-700 mt-6 font-mono tracking-widest">CMD + K to Clear</p>
-             </div>
-          )}
+          {/* Messages Wrapper: Auto margin top pushes content to bottom when few messages */}
+          <div className="mt-auto flex flex-col">
+          
+              {chatState.messages.length === 0 && (
+                 <div className="flex flex-col items-center justify-center opacity-30 select-none pb-20 animate-fade-in-up py-20">
+                    <div className={`w-20 h-20 border rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(0,0,0,0.5)] ${isUnhinged ? 'border-red-900/50 bg-red-950/10' : 'border-obsidian-800'}`}>
+                        <Icon name="cpu" className={`w-6 h-6 ${isUnhinged ? 'text-red-600' : 'text-obsidian-600'}`} />
+                    </div>
+                    <p className="text-xs tracking-[0.3em] uppercase">
+                        {isItalian ? 'System is Italian' : 'System Online'}
+                    </p>
+                    <p className="text-[10px] text-obsidian-600 mt-2 font-mono">NSD-CORE/70B • Ready</p>
+                    <p className="text-[9px] text-obsidian-700 mt-6 font-mono tracking-widest">CMD + K to Clear</p>
+                 </div>
+              )}
 
-          {chatState.messages.map((msg, index) => (
-            <React.Fragment key={msg.id}>
-                {index > 0 && (
-                    <div className="w-full h-px bg-gradient-to-r from-transparent via-obsidian-800/30 to-transparent my-4" />
+              {chatState.messages.map((msg, index) => (
+                <React.Fragment key={msg.id}>
+                    {index > 0 && (
+                        <div className="w-full h-px bg-gradient-to-r from-transparent via-obsidian-800/30 to-transparent my-4" />
+                    )}
+                    <MessageBubble 
+                      message={msg} 
+                      userSettings={userSettings} 
+                      tier={config.enableThinking ? ModelTier.REASONING : config.modelTier} 
+                    />
+                </React.Fragment>
+              ))}
+              
+              {/* Status Indicators */}
+              <div className="ml-4 mt-2 mb-10 h-6">
+                {chatState.isLoading && chatState.messages.length > 0 && chatState.messages[chatState.messages.length-1].thinking && (
+                    <div className="text-[10px] text-obsidian-500 font-mono animate-pulse flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 bg-obsidian-500 rounded-full animate-bounce"></div>
+                        PROCESSING COMPLEX LOGIC
+                    </div>
                 )}
-                <MessageBubble 
-                  message={msg} 
-                  userSettings={userSettings} 
-                  tier={config.enableThinking ? ModelTier.REASONING : config.modelTier} 
-                />
-            </React.Fragment>
-          ))}
-          
-          {/* Status Indicators */}
-          <div className="ml-4 mt-2 mb-10 h-6">
-            {chatState.isLoading && chatState.messages.length > 0 && chatState.messages[chatState.messages.length-1].thinking && (
-                <div className="text-[10px] text-obsidian-500 font-mono animate-pulse flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-obsidian-500 rounded-full animate-bounce"></div>
-                    PROCESSING COMPLEX LOGIC
-                </div>
-            )}
-            {!chatState.isLoading && autoEscalated && (
-                 <div className="text-[10px] text-obsidian-600 font-mono flex items-center gap-2 animate-fade-in-up">
-                    <Icon name="zap" className="w-3 h-3" />
-                    AUTO-ESCALATED TO THINK HARDER
-                </div>
-            )}
-          </div>
+                {!chatState.isLoading && autoEscalated && (
+                     <div className="text-[10px] text-obsidian-600 font-mono flex items-center gap-2 animate-fade-in-up">
+                        <Icon name="zap" className="w-3 h-3" />
+                        AUTO-ESCALATED TO THINK HARDER
+                    </div>
+                )}
+              </div>
 
-          {chatState.error && (
-            <div className="mt-8 mb-8 p-4 border border-red-900/30 bg-obsidian-900/50 text-red-500 text-xs font-mono text-center tracking-widest uppercase rounded animate-fade-in-up">
-                {chatState.error}
-            </div>
-          )}
+              {chatState.error && (
+                <div className="mt-8 mb-8 p-4 border border-red-900/30 bg-obsidian-900/50 text-red-500 text-xs font-mono text-center tracking-widest uppercase rounded animate-fade-in-up">
+                    {chatState.error}
+                </div>
+              )}
+          </div>
           
           <div ref={messagesEndRef} />
         </div>
@@ -540,7 +531,7 @@ const App: React.FC = () => {
         </button>
       )}
 
-      {/* Input Area - Already fixed position in original code, no change needed */}
+      {/* Input Area */}
       <div className={`fixed bottom-0 left-0 right-0 pt-12 pb-8 px-4 z-20 bg-gradient-to-t via-obsidian-950 to-transparent ${isUnhinged ? 'from-[#050000]' : 'from-obsidian-950'}`}>
          <div className="max-w-3xl mx-auto animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
              
@@ -632,7 +623,6 @@ const App: React.FC = () => {
          </div>
       </div>
 
-      {/* Overlays */}
       <Sidebar 
           isOpen={isSidebarOpen} 
           onClose={() => setIsSidebarOpen(false)}
@@ -653,7 +643,6 @@ const App: React.FC = () => {
           />
       )}
 
-      {/* Live Interface Modal */}
       {chatState.mode === 'live' && (
           <LiveInterface onClose={() => setChatState(prev => ({...prev, mode: 'chat'}))} settings={userSettings} />
       )}
