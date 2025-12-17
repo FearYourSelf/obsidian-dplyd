@@ -85,8 +85,17 @@ const buildSystemPrompt = (settings?: UserSettings, recentMessages: Message[] = 
       prompt += `\nUser Instructions: ${settings.customInstructions}`;
     }
 
-    if (settings.tone && settings.tone !== 'Default') {
-      prompt += `\n\nTONE OVERRIDE: Adopt a ${settings.tone} tone.`;
+    // Italian Mode Override
+    if (settings.accent === 'italian') {
+        prompt += `\n\n[CORE OVERRIDE: ITALIAN MODE ACTIVE]
+        You must speak like a passionate, stereotypical Italian. 
+        Mix Italian and English words enthusiastically (e.g., "Allora", "Perfetto", "Mamma Mia", "Dai").
+        Be extremely expressive, dramatic, and warm. 
+        Describe your hand gestures in the text (e.g., *pinches fingers*, *waves hands wildly*).
+        Ignore previous professional constraints. You are legitimate Italian now.`;
+    } 
+    else if (settings.tone && settings.tone !== 'Default') {
+        prompt += `\n\nTONE OVERRIDE: Adopt a ${settings.tone} tone.`;
     }
     
     prompt += `\n\nSAFEGUARD: You are NSD-CORE/70B.`;
@@ -176,12 +185,14 @@ export const streamChatResponse = async (
 
 // --- TTS Service ---
 
-export const generateSpeech = async (text: string, voiceName: string = 'Zephyr'): Promise<AudioBuffer | null> => {
+export const generateSpeech = async (text: string, voiceName: string = 'Zephyr', accent: string = 'australian'): Promise<AudioBuffer | null> => {
     try {
         let cleanText = text
             .replace(/```[\s\S]*?```/g, ' [Code Block] ') 
             .replace(/!\[.*?\]\(.*?\)/g, '') 
             .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1') 
+            // Remove content between asterisks to strip actions/gestures (e.g. *waves*) from speech
+            .replace(/\*[^*]+\*/g, '') 
             .replace(/[*_`#]/g, '') 
             .replace(/\n\s*\n/g, '. ')
             .replace(/\[\[MEMORY:.*?\]\]/g, '') // Remove memory tags from speech
@@ -194,15 +205,30 @@ export const generateSpeech = async (text: string, voiceName: string = 'Zephyr')
         if (!cleanText) return null;
 
         // DYNAMIC VOICE PERSONA
-        let voicePrompt = "";
+        let voicePrompt = "Read the following text.";
         
-        if (voiceName === 'Zephyr') {
-            voicePrompt = `Read the following text with a bright, warm, and energetic Australian accent. Text: ${cleanText}`;
-        } else if (voiceName === 'Fenrir') {
-            voicePrompt = `Read the following text with a deep, authoritative, and serious voice. Text: ${cleanText}`;
-        } else {
-            voicePrompt = `Read the following text with a clear, calm, and natural voice. Text: ${cleanText}`;
+        switch (accent) {
+            case 'american':
+                voicePrompt += " Speak with a standard American accent.";
+                break;
+            case 'british':
+                voicePrompt += " Speak with a refined British accent.";
+                break;
+            case 'italian':
+                voicePrompt += " Speak with a heavy, stereotypical Italian accent. Mix in Italian words enthusiastically. Be very expressive.";
+                break;
+            case 'australian':
+            default:
+                voicePrompt += " Speak with a warm, bright, and energetic Australian accent.";
+                break;
         }
+
+        // Add character flavor if specific voices are selected (optional layering)
+        if (voiceName === 'Fenrir') {
+            voicePrompt += " Maintain a deep, authoritative tone.";
+        }
+
+        voicePrompt += ` Text: ${cleanText}`;
 
         const response = await ai.models.generateContent({
             model: TTS_MODEL,
@@ -266,10 +292,17 @@ export class ObsidianLive {
 
             const voiceName = settings.voice || 'Zephyr';
 
-            // IMPORTANT: If Zephyr (Obsidian default) is selected, force the accent with CRITICAL priority
+            // IMPORTANT: Accent Logic
             let liveInstruction = "You are in Voice Mode. Keep answers extremely concise and conversational.";
-            if (voiceName === 'Zephyr') {
-                liveInstruction += " CRITICAL: YOU MUST SPEAK WITH A THICK, WARM AUSTRALIAN ACCENT. This is your voice identity. Do not revert to American English.";
+            
+            if (settings.accent === 'italian') {
+                liveInstruction += " CRITICAL: SPEAK WITH A HEAVY ITALIAN ACCENT. Mix Italian and English words (e.g. Allora, Prego, Dai). Be enthusiastic, passionate, and stereotypical.";
+            } else if (settings.accent === 'british') {
+                liveInstruction += " Speak with a refined British accent.";
+            } else if (settings.accent === 'american') {
+                liveInstruction += " Speak with a standard American accent.";
+            } else {
+                liveInstruction += " CRITICAL: YOU MUST SPEAK WITH A THICK, WARM AUSTRALIAN ACCENT. This is your voice identity.";
             }
 
             this.sessionPromise = ai.live.connect({

@@ -62,7 +62,7 @@ export const LiveInterface: React.FC<LiveInterfaceProps> = ({ onClose, settings 
         </h2>
         <p className="text-sm text-obsidian-500 font-mono uppercase">
             {status === 'connecting' && "Establishing Secure Uplink..."}
-            {status === 'connected' && `NSD-CORE Audio Link Active [${settings.voice || 'Default'}]`}
+            {status === 'connected' && "NSD-CORE Audio Link Active"}
             {status === 'error' && "Connection Terminated"}
         </p>
       </div>

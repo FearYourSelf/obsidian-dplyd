@@ -45,8 +45,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, 
       setIsPlayingPreview(true);
       
       let text = "This is the voice of Obsidian, powered by N S D Core.";
+      if (localSettings.accent === 'italian') {
+          text = "Mamma mia! This is the voice of Obsidian, powered by N S D Core. Allora!";
+      }
       
-      const buffer = await generateSpeech(text, voiceName);
+      // Use local toggle setting for preview
+      const buffer = await generateSpeech(text, voiceName, localSettings.accent);
+      
       if (buffer) {
           const ctx = getSharedAudioContext();
           const source = ctx.createBufferSource();
@@ -98,7 +103,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, 
           <div className="w-48 border-r border-obsidian-800 bg-obsidian-950/50 p-4 space-y-1">
              {[
                  { id: 'personalization', label: 'Personalization' },
-                 { id: 'voice', label: 'Voice' },
+                 { id: 'voice', label: 'Voice Mode' },
                  { id: 'memory', label: 'Memory Bank' },
                  { id: 'data', label: 'Data Controls' },
              ].map(tab => (
@@ -189,6 +194,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, 
 
             {activeTab === 'voice' && (
                 <div className="space-y-8">
+                    {/* Accent Selection */}
+                    <div>
+                         <label className="block text-xs font-mono text-obsidian-400 uppercase mb-3">Accent & Dialect</label>
+                         <div className="grid grid-cols-2 gap-3">
+                             {['australian', 'american', 'british', 'italian'].map((acc) => (
+                                 <button 
+                                    key={acc}
+                                    onClick={() => handleChange('accent', acc)}
+                                    className={`relative p-3 rounded border text-left transition-all overflow-hidden group ${localSettings.accent === acc ? (acc === 'italian' ? 'bg-gradient-to-r from-green-900/30 via-transparent to-red-900/30 border-red-900/50' : 'bg-obsidian-800 border-white') : 'bg-obsidian-950 border-obsidian-700 hover:border-obsidian-600'}`}
+                                 >
+                                     <div className="text-sm font-medium capitalize flex items-center gap-2">
+                                         {acc === 'italian' ? '🤌 Italian' : acc}
+                                         {localSettings.accent === acc && <Icon name="check" className="w-3 h-3 text-green-500" />}
+                                     </div>
+                                     {acc === 'italian' && (
+                                         <div className="absolute inset-0 bg-gradient-to-r from-green-500/10 via-transparent to-red-500/10 pointer-events-none"></div>
+                                     )}
+                                 </button>
+                             ))}
+                         </div>
+                         <p className="text-[10px] text-obsidian-500 mt-2">
+                             {localSettings.accent === 'italian' ? "Warning: Overrides all personality settings. Molto bene." : "Applies to both Text-to-Speech and Live Mode."}
+                         </p>
+                    </div>
+
                     <div>
                         <label className="block text-xs font-mono text-obsidian-400 uppercase mb-2">Voice Model</label>
                         <div className="grid grid-cols-1 gap-2">
@@ -208,7 +238,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, 
                             ))}
                         </div>
                     </div>
-                    {/* Tone Selector Moved to Header - Removed from here */}
                 </div>
             )}
 

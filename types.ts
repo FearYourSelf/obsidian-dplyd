@@ -1,3 +1,4 @@
+
 export enum Role {
   USER = 'user',
   MODEL = 'model',
@@ -51,14 +52,15 @@ export interface Memory {
 export interface UserSettings {
   userName: string;
   occupation: string;
-  aboutUser: string; // Legacy field, kept for compatibility, now mostly replaced by Memory Bank
+  aboutUser: string; // Legacy field
   customInstructions: string;
   voice: string;
+  accent: 'australian' | 'american' | 'british' | 'italian'; // Updated field
   tone: string;
   
   // Language
-  languageInterface: 'en' | 'es' | 'fr' | 'de' | 'ja' | 'zh'; // UI Language
-  languageModel: string; // "Auto", "English", "Spanish", etc.
+  languageInterface: 'en' | 'es' | 'fr' | 'de' | 'ja' | 'zh'; 
+  languageModel: string; 
 
   // Data
   allowTraining: boolean;

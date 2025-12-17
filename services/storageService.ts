@@ -10,6 +10,7 @@ export const defaultSettings: UserSettings = {
   aboutUser: '',
   customInstructions: '',
   voice: 'Zephyr',
+  accent: 'australian', // Default to Australian
   tone: 'Default',
   languageInterface: 'en',
   languageModel: 'Auto-Detect',
@@ -20,7 +21,16 @@ export const defaultSettings: UserSettings = {
 export const loadSettings = (): UserSettings => {
   try {
     const stored = localStorage.getItem(SETTINGS_KEY);
-    return stored ? { ...defaultSettings, ...JSON.parse(stored) } : defaultSettings;
+    // Migration for old boolean setting if exists
+    if (stored) {
+        const parsed = JSON.parse(stored);
+        if (typeof parsed.enableAustralianAccent === 'boolean') {
+            parsed.accent = parsed.enableAustralianAccent ? 'australian' : 'american';
+            delete parsed.enableAustralianAccent;
+        }
+        return { ...defaultSettings, ...parsed };
+    }
+    return defaultSettings;
   } catch (e) {
     return defaultSettings;
   }

@@ -35,7 +35,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
     setTimeout(async () => {
         // Use configured voice or default
         const voice = userSettings?.voice || 'Zephyr';
-        const audioBuffer = await generateSpeech(message.content, voice);
+        // Pass the user setting for accent (default to australian if undefined)
+        const accent = userSettings?.accent || 'australian';
+        
+        const audioBuffer = await generateSpeech(message.content, voice, accent);
         setIsGenerating(false);
         
         if (audioBuffer) {
@@ -162,10 +165,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
                         <div className="w-3 h-3 border-2 border-obsidian-500 border-t-white rounded-full animate-spin"></div>
                     ) : (
                         <div className="relative">
-                            <Icon name="volume" className="w-3 h-3 z-10 relative" />
-                            {isPlaying && (
-                                <span className="absolute -inset-1 rounded-full border border-white opacity-40 animate-ping-slow"></span>
-                            )}
+                            {/* The Icon itself pulses in opacity/brightness if playing */}
+                            <div className={`${isPlaying ? 'animate-pulse text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : ''}`}>
+                                <Icon name="volume" className="w-3 h-3" />
+                            </div>
                         </div>
                     )}
                 </button>

@@ -348,41 +348,55 @@ const App: React.FC = () => {
   };
   
   const isUnhinged = userSettings.tone === 'Unhinged';
+  const isItalian = userSettings.accent === 'italian';
 
   return (
     <div className={`flex flex-col h-screen font-sans overflow-hidden selection:bg-obsidian-700 selection:text-white relative transition-colors duration-1000 ${isUnhinged ? 'bg-[#050000]' : 'bg-obsidian-950'} text-obsidian-200`}>
       
       {/* Backgrounds - Boosted Visibility */}
       <div className="bg-noise absolute inset-0 z-0 opacity-[0.03]"></div>
-      <div className={`absolute inset-0 z-0 bg-gradient-radial opacity-90 animate-aurora pointer-events-none ${isUnhinged ? 'from-[#1a0000] via-[#050000] to-[#000000]' : 'from-obsidian-900 via-obsidian-950 to-obsidian-950'}`}></div>
+      
+      {/* Dynamic Background */}
+      {isItalian ? (
+         <div className="absolute inset-0 z-0 bg-gradient-to-r from-[#008C45]/20 via-transparent to-[#CD212A]/20 opacity-80 pointer-events-none animate-fade-in"></div>
+      ) : (
+         <div className={`absolute inset-0 z-0 bg-gradient-radial opacity-90 animate-aurora pointer-events-none ${isUnhinged ? 'from-[#1a0000] via-[#050000] to-[#000000]' : 'from-obsidian-900 via-obsidian-950 to-obsidian-950'}`}></div>
+      )}
 
       {/* Header - Fixed Position */}
-      <header className={`fixed top-0 left-0 right-0 h-16 flex items-center justify-between px-6 z-50 backdrop-blur-md border-b transition-colors duration-500 ${isUnhinged ? 'bg-[#050000]/90 border-red-900/20' : 'bg-gradient-to-b from-obsidian-950 to-obsidian-950/90 border-white/5'}`}>
-        <div className="flex items-center gap-4">
+      <header className={`fixed top-0 left-0 right-0 h-16 flex items-center justify-between px-4 sm:px-6 z-50 backdrop-blur-md border-b transition-colors duration-500 ${isUnhinged ? 'bg-[#050000]/90 border-red-900/20' : 'bg-gradient-to-b from-obsidian-950 to-obsidian-950/90 border-white/5'}`}>
+        <div className="flex items-center gap-3 sm:gap-4">
             <button onClick={() => setIsSidebarOpen(true)} className="text-obsidian-500 hover:text-white transition-colors">
                 <Icon name="menu" className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-3 select-none">
-              <div className={`w-2 h-2 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.3)] animate-pulse-slow ${isUnhinged ? 'bg-red-600 shadow-red-500/50' : 'bg-white'}`}></div>
+            <div className="flex items-center gap-2 sm:gap-3 select-none">
+              <div className={`w-2 h-2 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.3)] animate-pulse-slow ${isItalian ? 'bg-white' : (isUnhinged ? 'bg-red-600 shadow-red-500/50' : 'bg-white')}`}></div>
               <h1 className={`text-xs font-semibold tracking-[0.2em] opacity-90 ${isUnhinged ? 'text-red-500' : 'text-white'}`}>
                 OBSIDIAN
-                {isUnhinged && <span className="ml-2 px-1.5 py-0.5 bg-red-900/30 border border-red-800 rounded text-[9px] font-mono text-red-500 animate-pulse">UNHINGED</span>}
+                {isItalian && <span className="ml-2 px-1.5 py-0.5 bg-green-900/30 border border-green-800 rounded text-[9px] font-mono text-green-500 animate-fade-in-up hidden sm:inline-block">Per rispetto della nostra patria 🤌</span>}
+                {isUnhinged && !isItalian && <span className="ml-2 px-1.5 py-0.5 bg-red-900/30 border border-red-800 rounded text-[9px] font-mono text-red-500 animate-pulse hidden sm:inline-block">UNHINGED</span>}
               </h1>
             </div>
         </div>
 
-        <div className="flex items-center gap-4">
-             {/* Tone Selector in Header */}
-            <select 
-                value={userSettings.tone}
-                onChange={(e) => handleToneChange(e.target.value)}
-                className={`bg-transparent text-[10px] font-mono uppercase tracking-widest border-none focus:ring-0 cursor-pointer hover:text-white transition-colors text-right appearance-none pr-4 outline-none ${isUnhinged ? 'text-red-600 hover:text-red-400' : 'text-obsidian-500'}`}
-                style={{ textAlignLast: 'right' }} // Aligns text to right in some browsers
-            >
-                {TONES.map(t => (
-                    <option key={t} value={t} className="bg-obsidian-900 text-obsidian-300">{t}</option>
-                ))}
-            </select>
+        <div className="flex items-center gap-2 sm:gap-4">
+             {/* Tone Selector in Header - Wrapper ensures correct positioning */}
+            <div className="relative group flex items-center">
+                <select 
+                    value={userSettings.tone}
+                    onChange={(e) => handleToneChange(e.target.value)}
+                    className={`bg-transparent text-[10px] font-mono uppercase tracking-widest border-none focus:ring-0 cursor-pointer hover:text-white transition-colors text-right appearance-none py-1 pr-6 outline-none ${isUnhinged ? 'text-red-600 hover:text-red-400' : 'text-obsidian-500'}`}
+                    style={{ textAlignLast: 'right' }} 
+                >
+                    {TONES.map(t => (
+                        <option key={t} value={t} className="bg-obsidian-900 text-obsidian-300">{t}</option>
+                    ))}
+                </select>
+                {/* Manual Chevron for visibility */}
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-obsidian-600">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </div>
+            </div>
 
             <div className="h-3 w-px bg-obsidian-800"></div>
 
@@ -391,7 +405,7 @@ const App: React.FC = () => {
                 className="text-[10px] font-mono uppercase tracking-widest text-obsidian-500 hover:text-white transition-colors flex items-center gap-2"
             >
                 <Icon name={config.enableThinking ? "cpu" : "zap"} className="w-3 h-3" />
-                {getModelLabel()}
+                <span className="hidden sm:inline">{getModelLabel()}</span>
             </button>
             
             <div className="h-3 w-px bg-obsidian-800"></div>
@@ -419,7 +433,9 @@ const App: React.FC = () => {
                 <div className={`w-20 h-20 border rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(0,0,0,0.5)] ${isUnhinged ? 'border-red-900/50 bg-red-950/10' : 'border-obsidian-800'}`}>
                     <Icon name="cpu" className={`w-6 h-6 ${isUnhinged ? 'text-red-600' : 'text-obsidian-600'}`} />
                 </div>
-                <p className="text-xs tracking-[0.3em] uppercase">System Online</p>
+                <p className="text-xs tracking-[0.3em] uppercase">
+                    {isItalian ? 'System is Italian' : 'System Online'}
+                </p>
                 <p className="text-[10px] text-obsidian-600 mt-2 font-mono">NSD-CORE/70B • Ready</p>
                 <p className="text-[9px] text-obsidian-700 mt-6 font-mono tracking-widest">CMD + K to Clear</p>
              </div>
