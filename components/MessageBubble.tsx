@@ -10,10 +10,12 @@ import { CodeBlock } from './CodeBlock';
 interface MessageBubbleProps {
   message: Message;
   userSettings?: UserSettings;
-  tier?: ModelTier; // Receive tier
+  tier?: ModelTier; 
+  onRegenerate?: (message: Message) => void;
+  onImageClick?: (url: string) => void;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSettings, tier }) => {
+export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSettings, tier, onRegenerate, onImageClick }) => {
   const isUser = message.role === Role.USER;
   const [isPlaying, setIsPlaying] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -31,11 +33,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
     
     setIsGenerating(true);
     
-    // Slight delay to ensure UI updates before heavy work
     setTimeout(async () => {
-        // Use configured voice or default
         const voice = userSettings?.voice || 'Zephyr';
-        // Pass the user setting for accent (default to australian if undefined)
         const accent = userSettings?.accent || 'australian';
         
         const audioBuffer = await generateSpeech(message.content, voice, accent);
@@ -43,7 +42,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
         
         if (audioBuffer) {
             setIsPlaying(true);
-            // Use the SHARED context that created the buffer
             const ctx = getSharedAudioContext();
             const source = ctx.createBufferSource();
             source.buffer = audioBuffer;
@@ -60,7 +58,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
       setFeedback(prev => prev === type ? null : type);
   };
 
-  // Helper to extract clean chunks for rendering
   const getGroundingSources = () => {
       if (!message.groundingMetadata?.groundingChunks) return [];
       
@@ -104,9 +101,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
         {message.attachments && message.attachments.length > 0 && (
           <div className="flex gap-2 mb-3">
             {message.attachments.map((att, i) => (
-              <div key={i} className="relative group overflow-hidden rounded border border-obsidian-700 bg-obsidian-800">
+              <div 
+                key={i} 
+                className="relative group overflow-hidden rounded border border-obsidian-700 bg-obsidian-800 cursor-pointer transition-transform hover:scale-[1.02]"
+                onClick={() => onImageClick && att.mimeType.startsWith('image/') && onImageClick(att.previewUrl)}
+              >
                  {att.mimeType.startsWith('image/') ? (
-                   <img src={att.previewUrl} alt="Attachment" className="h-32 w-auto object-cover opacity-80" />
+                   <img src={att.previewUrl} alt="Attachment" className="h-32 w-auto object-cover opacity-80 hover:opacity-100 transition-opacity" />
                  ) : (
                    <div className="h-32 w-32 flex items-center justify-center text-obsidian-400">
                      <span className="text-xs uppercase">Video</span>
@@ -125,7 +126,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
         `}>
           <ReactMarkdown
              components={{
-                 // Styled Markdown Links
                  a: ({node, ...props}) => (
                      <a 
                        {...props} 
@@ -134,7 +134,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
                        className="text-obsidian-400 border-b border-obsidian-600/50 pb-0.5 hover:text-white hover:border-white transition-all duration-300 no-underline"
                      />
                  ),
-                 // Custom Code Block Engine
                  code({node, className, children, ...props}) {
                     const match = /language-(\w+)/.exec(className || '')
                     // @ts-ignore
@@ -171,7 +170,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
                             className="flex items-center gap-2 px-3 py-1.5 bg-obsidian-900 border border-obsidian-800 rounded hover:border-obsidian-600 hover:text-white transition-colors text-xs text-obsidian-400 no-underline"
                         >
                             <span className="truncate max-w-[150px]">{source.title}</span>
-                            <Icon name="zap" className="w-2 h-2 opacity-50" /> {/* Reusing zap icon as external link indicator roughly */}
+                            <Icon name="zap" className="w-2 h-2 opacity-50" />
                         </a>
                     ))}
                 </div>
@@ -208,13 +207,23 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
                         <div className="w-3 h-3 border-2 border-obsidian-500 border-t-white rounded-full animate-spin"></div>
                     ) : (
                         <div className="relative">
-                            {/* The Icon itself pulses in opacity/brightness if playing */}
                             <div className={`${isPlaying ? 'animate-pulse text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : ''}`}>
                                 <Icon name="volume" className="w-3 h-3" />
                             </div>
                         </div>
                     )}
                 </button>
+
+                {/* Regenerate Button */}
+                {onRegenerate && (
+                  <button 
+                    onClick={() => onRegenerate(message)}
+                    className="flex items-center gap-1.5 text-[10px] font-mono tracking-wider text-obsidian-500 hover:text-white transition-colors uppercase p-2 rounded hover:bg-obsidian-900/50"
+                    title="Regenerate"
+                  >
+                    <Icon name="refresh-cw" className="w-3 h-3" />
+                  </button>
+                )}
 
                 {/* Divider */}
                 <div className="w-px h-3 bg-obsidian-800 my-auto"></div>

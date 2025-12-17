@@ -24,7 +24,7 @@ const App: React.FC = () => {
   
   const [chatState, setChatState] = useState<ChatState>({
     messages: [],
-    isLoading: false,
+    isLoading: false, // Tracks if streaming is active
     error: null,
     mode: 'chat',
     currentChatId: null
@@ -48,7 +48,13 @@ const App: React.FC = () => {
   const [showSaveToast, setShowSaveToast] = useState(false); 
   const [showMemoryToast, setShowMemoryToast] = useState(false);
   const [isSearchEnabled, setIsSearchEnabled] = useState(false);
-  const [isStudyDropdownOpen, setIsStudyDropdownOpen] = useState(false); // New Academics State
+  const [isStudyDropdownOpen, setIsStudyDropdownOpen] = useState(false);
+  
+  // Lightbox State
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  
+  // Stop Generation Ref
+  const stopGenerationRef = useRef<boolean>(false);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -99,12 +105,21 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // Auto-resize textarea
+  useEffect(() => {
+    if (inputRef.current) {
+        inputRef.current.style.height = '44px'; // Reset height
+        const scrollHeight = inputRef.current.scrollHeight;
+        inputRef.current.style.height = Math.min(scrollHeight, 200) + 'px';
+    }
+  }, [input]);
+
   // Load chats on mount
   useEffect(() => {
     setSavedChats(loadChats());
   }, []);
 
-  // SCROLL LOCK ENGINE v2.0 (The Ultimate Fix)
+  // SCROLL LOCK ENGINE v2.0
   useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -193,6 +208,137 @@ const App: React.FC = () => {
       setIsStudyDropdownOpen(false);
   };
 
+  const handleStopGeneration = () => {
+      stopGenerationRef.current = true;
+      setChatState(prev => ({ ...prev, isLoading: false }));
+  };
+
+  const handleRegenerate = async () => {
+      // Find the last user message to use as prompt
+      const lastUserMsgIndex = chatState.messages.findLastIndex(m => m.role === Role.USER);
+      if (lastUserMsgIndex === -1) return;
+
+      const userMsg = chatState.messages[lastUserMsgIndex];
+      
+      // Remove everything after this user message
+      const trimmedMessages = chatState.messages.slice(0, lastUserMsgIndex + 1);
+
+      setChatState(prev => ({
+          ...prev,
+          messages: trimmedMessages,
+          isLoading: true,
+          error: null
+      }));
+
+      // Trigger standard send logic with the identified message content/attachments
+      await processMessage(userMsg.content, userMsg.attachments || [], trimmedMessages);
+  };
+
+  // Logic extracted to support both new messages and regeneration
+  const processMessage = async (msgContent: string, msgAttachments: Attachment[], history: Message[]) => {
+      stopGenerationRef.current = false;
+      setAutoEscalated(false);
+
+      const modelMessageId = generateId();
+      let activeTier = config.modelTier;
+      let thinkingEnabled = config.enableThinking;
+
+      if (config.modelTier === ModelTier.BALANCED && !config.enableThinking) {
+          if (detectComplexity(msgContent) || msgAttachments?.length > 0) {
+              activeTier = ModelTier.REASONING;
+              thinkingEnabled = true;
+              setAutoEscalated(true);
+          }
+      }
+      
+      setChatState(prev => ({
+        ...prev,
+        messages: [...prev.messages, {
+          id: modelMessageId,
+          role: Role.MODEL,
+          content: '',
+          timestamp: Date.now(),
+          isStreaming: true,
+          thinking: thinkingEnabled
+        }]
+      }));
+
+      try {
+        let accumulatedText = '';
+        
+        await streamChatResponse(
+          history, 
+          msgContent,
+          msgAttachments || [],
+          activeTier,
+          thinkingEnabled,
+          isSearchEnabled,
+          userSettings, 
+          (chunk) => {
+             if (stopGenerationRef.current) return; // Stop update if cancelled
+             accumulatedText += chunk;
+             setChatState(prev => ({
+               ...prev,
+               messages: prev.messages.map(msg => 
+                 msg.id === modelMessageId 
+                   ? { ...msg, content: accumulatedText, thinking: false } 
+                   : msg
+               )
+             }));
+          },
+          (metadata) => {
+              if (stopGenerationRef.current) return;
+              setChatState(prev => ({
+                  ...prev,
+                  messages: prev.messages.map(msg => 
+                    msg.id === modelMessageId 
+                      ? { ...msg, groundingMetadata: metadata } 
+                      : msg
+                  )
+              }));
+          },
+          chatState.currentChatId
+        );
+
+        if (stopGenerationRef.current) return;
+
+        let finalText = accumulatedText;
+        const memoryRegex = /\[\[MEMORY: (.*?)\]\]/g;
+        const memoriesFound: string[] = [];
+        let match;
+        while ((match = memoryRegex.exec(accumulatedText)) !== null) {
+            memoriesFound.push(match[1]);
+        }
+
+        if (memoriesFound.length > 0) {
+            memoriesFound.forEach(mem => addMemory(mem, 'auto'));
+            finalText = accumulatedText.replace(memoryRegex, '').trim();
+            setShowMemoryToast(true);
+            setTimeout(() => setShowMemoryToast(false), 3000);
+        }
+
+        setChatState(prev => ({
+          ...prev,
+          isLoading: false,
+          messages: prev.messages.map(msg => 
+              msg.id === modelMessageId 
+                ? { ...msg, content: finalText, isStreaming: false } 
+                : msg
+            )
+        }));
+
+      } catch (error) {
+        console.error(error);
+        if (!stopGenerationRef.current) {
+            setChatState(prev => ({
+              ...prev,
+              isLoading: false,
+              error: "Connection Interrupted. NSD-CORE unreachable."
+            }));
+        }
+      }
+  };
+
   const handleSendMessage = async () => {
     if ((!input.trim() && attachments.length === 0) || chatState.isLoading) return;
 
@@ -207,110 +353,19 @@ const App: React.FC = () => {
       attachments: [...attachments]
     };
 
+    const newHistory = [...chatState.messages, userMessage];
+
     setChatState(prev => ({
       ...prev,
-      messages: [...prev.messages, userMessage],
+      messages: newHistory,
       isLoading: true,
       error: null
     }));
 
     setInput('');
     setAttachments([]);
-    setAutoEscalated(false);
-
-    const modelMessageId = generateId();
-
-    let activeTier = config.modelTier;
-    let thinkingEnabled = config.enableThinking;
-
-    if (config.modelTier === ModelTier.BALANCED && !config.enableThinking) {
-        if (detectComplexity(userMessage.content) || userMessage.attachments?.length > 0) {
-            activeTier = ModelTier.REASONING;
-            thinkingEnabled = true;
-            setAutoEscalated(true);
-        }
-    }
     
-    setChatState(prev => ({
-      ...prev,
-      messages: [...prev.messages, {
-        id: modelMessageId,
-        role: Role.MODEL,
-        content: '',
-        timestamp: Date.now(),
-        isStreaming: true,
-        thinking: thinkingEnabled
-      }]
-    }));
-
-    try {
-      let accumulatedText = '';
-      
-      await streamChatResponse(
-        [...chatState.messages, userMessage], 
-        userMessage.content,
-        userMessage.attachments || [],
-        activeTier,
-        thinkingEnabled,
-        isSearchEnabled,
-        userSettings, 
-        (chunk) => {
-           accumulatedText += chunk;
-           setChatState(prev => ({
-             ...prev,
-             messages: prev.messages.map(msg => 
-               msg.id === modelMessageId 
-                 ? { ...msg, content: accumulatedText, thinking: false } 
-                 : msg
-             )
-           }));
-        },
-        (metadata) => {
-            setChatState(prev => ({
-                ...prev,
-                messages: prev.messages.map(msg => 
-                  msg.id === modelMessageId 
-                    ? { ...msg, groundingMetadata: metadata } 
-                    : msg
-                )
-            }));
-        },
-        chatState.currentChatId // Pass current Chat ID
-      );
-
-      let finalText = accumulatedText;
-      const memoryRegex = /\[\[MEMORY: (.*?)\]\]/g;
-      const memoriesFound: string[] = [];
-      let match;
-      while ((match = memoryRegex.exec(accumulatedText)) !== null) {
-          memoriesFound.push(match[1]);
-      }
-
-      if (memoriesFound.length > 0) {
-          memoriesFound.forEach(mem => addMemory(mem, 'auto'));
-          finalText = accumulatedText.replace(memoryRegex, '').trim();
-          setShowMemoryToast(true);
-          setTimeout(() => setShowMemoryToast(false), 3000);
-      }
-
-      setChatState(prev => ({
-        ...prev,
-        isLoading: false,
-        messages: prev.messages.map(msg => 
-            msg.id === modelMessageId 
-              ? { ...msg, content: finalText, isStreaming: false } 
-              : msg
-          )
-      }));
-
-    } catch (error) {
-      console.error(error);
-      setChatState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: "Connection Interrupted. NSD-CORE unreachable."
-      }));
-    }
+    await processMessage(userMessage.content, userMessage.attachments || [], newHistory);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -478,7 +533,9 @@ const App: React.FC = () => {
                     <MessageBubble 
                       message={msg} 
                       userSettings={userSettings} 
-                      tier={config.enableThinking ? ModelTier.REASONING : config.modelTier} 
+                      tier={config.enableThinking ? ModelTier.REASONING : config.modelTier}
+                      onRegenerate={handleRegenerate}
+                      onImageClick={setLightboxImage}
                     />
                 </React.Fragment>
               ))}
@@ -508,6 +565,24 @@ const App: React.FC = () => {
           <div ref={messagesEndRef} />
         </div>
       </main>
+
+      {/* Lightbox Overlay */}
+      {lightboxImage && (
+          <div 
+            className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center animate-fade-in p-4"
+            onClick={() => setLightboxImage(null)}
+          >
+              <div className="relative max-w-full max-h-full animate-scale-in">
+                  <img src={lightboxImage} alt="Fullscreen" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" />
+                  <button 
+                    onClick={() => setLightboxImage(null)}
+                    className="absolute -top-12 right-0 text-white/50 hover:text-white transition-colors"
+                  >
+                      <Icon name="x" className="w-8 h-8" />
+                  </button>
+              </div>
+          </div>
+      )}
 
       {/* Auto-Save Toast */}
       {showSaveToast && (
@@ -596,7 +671,7 @@ const App: React.FC = () => {
                 </div>
              )}
 
-             <div className="relative flex items-end gap-2 bg-obsidian-900/40 backdrop-blur-xl border border-obsidian-800/50 rounded-2xl p-2 transition-all duration-300 hover:border-obsidian-700 group focus-within:border-obsidian-500/50 focus-within:shadow-[0_0_30px_rgba(255,255,255,0.05)] focus-within:bg-obsidian-900/80">
+             <div className={`relative flex items-end gap-2 bg-obsidian-900/40 backdrop-blur-xl border border-obsidian-800/50 rounded-2xl p-2 transition-all duration-300 hover:border-obsidian-700 group focus-within:border-obsidian-500/50 focus-within:shadow-[0_0_30px_rgba(255,255,255,0.05)] focus-within:bg-obsidian-900/80 ${chatState.isLoading ? 'border-obsidian-500/30 animate-pulse-slow' : ''}`}>
                 
                 {/* File Input */}
                 <input 
@@ -632,7 +707,6 @@ const App: React.FC = () => {
                         <Icon name="globe" />
                     </button>
 
-                    {/* ACADEMICS BUTTON - NEW */}
                     <button 
                         onClick={() => setIsStudyDropdownOpen(!isStudyDropdownOpen)}
                         className={`study-toggle p-2 transition-colors rounded-lg hover:bg-obsidian-800/50 ${isStudyDropdownOpen ? 'text-white bg-obsidian-800' : 'text-obsidian-500 hover:text-white'}`}
@@ -658,13 +732,23 @@ const App: React.FC = () => {
                 />
 
                 <div className="pb-1 pr-1">
-                    <button 
-                        onClick={handleSendMessage}
-                        disabled={!input.trim() && attachments.length === 0}
-                        className={`p-2 rounded-xl transition-all duration-500 ${(!input.trim() && attachments.length === 0) ? 'text-obsidian-700 cursor-not-allowed opacity-50' : 'text-obsidian-950 bg-white hover:bg-obsidian-200 shadow-[0_0_15px_rgba(255,255,255,0.1)]'}`}
-                    >
-                        <Icon name="send" className="w-4 h-4" />
-                    </button>
+                    {chatState.isLoading ? (
+                        <button 
+                            onClick={handleStopGeneration}
+                            className="p-2 rounded-xl text-white bg-obsidian-800 hover:bg-red-900/80 hover:text-red-200 transition-all duration-300 shadow-lg animate-fade-in"
+                            title="Stop Generation"
+                        >
+                            <Icon name="stop-circle" className="w-4 h-4" />
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={handleSendMessage}
+                            disabled={!input.trim() && attachments.length === 0}
+                            className={`p-2 rounded-xl transition-all duration-500 ${(!input.trim() && attachments.length === 0) ? 'text-obsidian-700 cursor-not-allowed opacity-50' : 'text-obsidian-950 bg-white hover:bg-obsidian-200 shadow-[0_0_15px_rgba(255,255,255,0.1)]'}`}
+                        >
+                            <Icon name="send" className="w-4 h-4" />
+                        </button>
+                    )}
                 </div>
              </div>
              

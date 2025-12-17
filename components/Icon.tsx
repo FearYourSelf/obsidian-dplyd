@@ -1,6 +1,6 @@
 import React from 'react';
 
-type IconName = 'send' | 'paperclip' | 'mic' | 'stop' | 'x' | 'cpu' | 'zap' | 'volume' | 'copy' | 'check' | 'thumbs-up' | 'thumbs-down' | 'menu' | 'settings' | 'trash' | 'history' | 'plus' | 'save' | 'play' | 'globe' | 'archive' | 'unarchive' | 'external-link' | 'lock' | 'shield' | 'book' | 'hat' | 'brain' | 'pen' | 'quiz';
+type IconName = 'send' | 'paperclip' | 'mic' | 'stop' | 'x' | 'cpu' | 'zap' | 'volume' | 'copy' | 'check' | 'thumbs-up' | 'thumbs-down' | 'menu' | 'settings' | 'trash' | 'history' | 'plus' | 'save' | 'play' | 'globe' | 'archive' | 'unarchive' | 'external-link' | 'lock' | 'shield' | 'book' | 'hat' | 'brain' | 'pen' | 'quiz' | 'refresh-cw' | 'stop-circle';
 
 interface IconProps {
   name: IconName;
@@ -17,6 +17,8 @@ export const Icon: React.FC<IconProps> = ({ name, className = "w-5 h-5" }) => {
       return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>;
     case 'stop':
       return <svg className={className} viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12"></rect></svg>;
+    case 'stop-circle':
+        return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><rect x="9" y="9" width="6" height="6"></rect></svg>;
     case 'x':
       return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>;
     case 'cpu':
@@ -69,6 +71,8 @@ export const Icon: React.FC<IconProps> = ({ name, className = "w-5 h-5" }) => {
         return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>;
     case 'quiz':
         return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>;
+    case 'refresh-cw':
+        return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>;
     default:
       return null;
   }
