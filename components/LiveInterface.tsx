@@ -12,6 +12,24 @@ export const LiveInterface: React.FC<LiveInterfaceProps> = ({ onClose, settings 
   const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [audioLevel, setAudioLevel] = useState(0);
   const liveRef = useRef<ObsidianLive | null>(null);
+  const wakeLockRef = useRef<any>(null);
+
+  // Function to request Screen Wake Lock
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        // @ts-ignore
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        console.log('Obsidian: Screen Wake Lock Active');
+        
+        wakeLockRef.current.addEventListener('release', () => {
+          console.log('Obsidian: Screen Wake Lock Released');
+        });
+      }
+    } catch (err: any) {
+      console.error(`${err.name}, ${err.message}`);
+    }
+  };
 
   useEffect(() => {
     liveRef.current = new ObsidianLive(
@@ -20,8 +38,24 @@ export const LiveInterface: React.FC<LiveInterfaceProps> = ({ onClose, settings 
     );
     liveRef.current.connect(settings);
 
+    // Initial wake lock request
+    requestWakeLock();
+
+    // Re-acquire wake lock if page becomes visible again
+    const handleVisibilityChange = async () => {
+      if (wakeLockRef.current !== null && document.visibilityState === 'visible') {
+        await requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       liveRef.current?.disconnect();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release();
+        wakeLockRef.current = null;
+      }
     };
   }, []);
 
@@ -32,6 +66,9 @@ export const LiveInterface: React.FC<LiveInterfaceProps> = ({ onClose, settings 
   return (
     <div className="fixed inset-0 z-50 bg-obsidian-950 flex flex-col items-center justify-center animate-fade-in">
       
+      {/* Background Pulse for "Active but Locked" feel */}
+      <div className={`absolute inset-0 opacity-10 pointer-events-none transition-colors duration-1000 ${isUnhinged ? 'bg-red-900' : 'bg-white'} ${status === 'connected' ? 'animate-pulse' : ''}`}></div>
+
       {/* Visualizer */}
       <div className="relative w-64 h-64 flex items-center justify-center">
         {/* Core */}
@@ -56,24 +93,37 @@ export const LiveInterface: React.FC<LiveInterfaceProps> = ({ onClose, settings 
         )}
       </div>
 
-      <div className="mt-12 text-center space-y-2">
+      <div className="mt-12 text-center space-y-2 relative z-10">
         <h2 className={`text-xl font-light tracking-widest ${isUnhinged ? 'text-red-500' : 'text-obsidian-200'}`}>
             {isUnhinged ? 'UNHINGED LIVE' : 'LIVE CONNECTION'}
         </h2>
-        <p className="text-sm text-obsidian-500 font-mono uppercase">
-            {status === 'connecting' && "Establishing Secure Uplink..."}
-            {status === 'connected' && "NSD-CORE Audio Link Active"}
-            {status === 'error' && "Connection Terminated"}
-        </p>
+        <div className="flex flex-col items-center gap-2">
+            <p className="text-sm text-obsidian-500 font-mono uppercase tracking-widest">
+                {status === 'connecting' && "Establishing Secure Uplink..."}
+                {status === 'connected' && "NSD-CORE Audio Link Active"}
+                {status === 'error' && "Connection Terminated"}
+            </p>
+            {status === 'connected' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-obsidian-900/50 border border-obsidian-800 rounded-full">
+                    <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse"></div>
+                    <span className="text-[10px] font-mono text-obsidian-400 uppercase tracking-tighter">Stay-Awake Protocol Engaged</span>
+                </div>
+            )}
+        </div>
       </div>
 
       {/* Controls */}
       <button 
         onClick={onClose}
-        className="mt-16 group p-4 rounded-full bg-obsidian-900 border border-obsidian-800 hover:border-red-900/50 hover:bg-red-900/10 transition-all"
+        className="mt-16 group p-4 rounded-full bg-obsidian-900 border border-obsidian-800 hover:border-red-900/50 hover:bg-red-900/10 transition-all relative z-10"
       >
         <Icon name="x" className="w-6 h-6 text-obsidian-400 group-hover:text-red-500" />
       </button>
+
+      {/* Subliminal usage info */}
+      <div className="absolute bottom-10 text-[9px] font-mono text-obsidian-700 uppercase tracking-[0.3em] opacity-40">
+        Audio persistence active for locked devices
+      </div>
 
     </div>
   );
