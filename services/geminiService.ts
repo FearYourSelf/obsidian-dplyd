@@ -8,7 +8,7 @@ import { loadMemories, findRelevantChatSegments } from "./storageService";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- Helper to build Dynamic Prompt ---
-const buildSystemPrompt = (settings?: UserSettings, recentMessages: Message[] = [], pastContext: string = ""): string => {
+const buildSystemPrompt = (settings?: UserSettings, recentMessages: Message[] = [], pastContext: string = "", isReasoning: boolean = false): string => {
   // If Unhinged, we replace the core persona entirely for maximum effect
   if (settings?.tone === 'Unhinged') {
       return `You are OBSIDIAN UNHINGED.
@@ -70,8 +70,26 @@ const buildSystemPrompt = (settings?: UserSettings, recentMessages: Message[] = 
           prompt += `${msg.role === Role.USER ? 'User' : 'Obsidian'}: ${msg.content.substring(0, 500)}\n`;
       });
   }
+  
+  // 6. Transparent Reasoning Instruction (New Feature)
+  if (isReasoning) {
+      prompt += `\n\n[REASONING PROTOCOL - TRANSPARENCY LAYER]
+      You are in Deep Reasoning Mode. Before providing your final answer, you MUST output your internal thought process.
+      Wrap your thoughts in [[THOUGHT]] and [[/THOUGHT]] tags.
+      This section should contain your step-by-step analysis, plan, or potential pitfalls.
+      
+      Example:
+      [[THOUGHT]]
+      1. Analyze user request...
+      2. Identify key constraints...
+      3. Formulate solution...
+      [[/THOUGHT]]
+      
+      Here is the final answer...
+      `;
+  }
 
-  // 6. Ecosystem Referrals (Umbrax, Specter, & Main Hub) - NEW
+  // 7. Ecosystem Referrals (Umbrax, Specter, & Main Hub) - NEW
   prompt += `\n\n[ECOSYSTEM REFERRALS - CONDITIONAL]
   If and ONLY if the user asks about specific capabilities (images, vision) or the company/ecosystem in general, provide the relevant NSD ecosystem links below. Do not mention them otherwise.
   
@@ -171,9 +189,11 @@ export const streamChatResponse = async (
       };
   });
 
+  const isReasoning = tier === ModelTier.REASONING || enableThinking;
+
   const config: any = {
     // Inject recent history AND past context
-    systemInstruction: buildSystemPrompt(settings, pastHistory, pastContext),
+    systemInstruction: buildSystemPrompt(settings, pastHistory, pastContext, isReasoning),
   };
   
   // Conditional Google Search Grounding
@@ -241,6 +261,7 @@ export const generateSpeech = async (text: string, voiceName: string = 'Zephyr',
             .replace(/[*_`#]/g, '') 
             .replace(/\n\s*\n/g, '. ')
             .replace(/\[\[MEMORY:.*?\]\]/g, '') // Remove memory tags from speech
+            .replace(/\[\[THOUGHT\]\][\s\S]*?\[\[\/THOUGHT\]\]/g, '') // Remove thought process from speech
             .trim();
         
         if (cleanText.length > 2500) {

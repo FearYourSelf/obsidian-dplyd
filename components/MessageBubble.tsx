@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import { Message, Role, UserSettings, ModelTier } from '../types';
 import { Icon } from './Icon';
 import { generateSpeech } from '../services/geminiService';
@@ -21,9 +23,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
   const [isGenerating, setIsGenerating] = useState(false);
   const [showCopied, setShowCopied] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+  const [isThinkingOpen, setIsThinkingOpen] = useState(false);
+
+  // Extract Thoughts from content
+  const thoughtRegex = /\[\[THOUGHT\]\]([\s\S]*?)\[\[\/THOUGHT\]\]/;
+  const thoughtMatch = message.content.match(thoughtRegex);
+  const thoughtContent = thoughtMatch ? thoughtMatch[1].trim() : null;
+  const displayContent = message.content.replace(thoughtRegex, '').trim();
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(message.content);
+    navigator.clipboard.writeText(displayContent);
     setShowCopied(true);
     setTimeout(() => setShowCopied(false), 2000);
   };
@@ -37,7 +46,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
         const voice = userSettings?.voice || 'Zephyr';
         const accent = userSettings?.accent || 'australian';
         
-        const audioBuffer = await generateSpeech(message.content, voice, accent);
+        const audioBuffer = await generateSpeech(displayContent, voice, accent);
         setIsGenerating(false);
         
         if (audioBuffer) {
@@ -83,7 +92,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
         {/* Role Label or Typing Indicator */}
         <div className="h-5 flex items-center mb-2">
             {message.role === Role.MODEL ? (
-                message.isStreaming ? (
+                message.isStreaming && !displayContent && !thoughtContent ? (
                     <TypingIndicator tier={tier} />
                 ) : (
                     <span className="text-xs font-mono text-obsidian-500 uppercase tracking-widest opacity-60">
@@ -118,6 +127,28 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
           </div>
         )}
 
+        {/* Thought Process Accordion */}
+        {!isUser && thoughtContent && (
+             <div className="mb-4 w-full border-l-2 border-obsidian-700/50 pl-3">
+                 <button 
+                    onClick={() => setIsThinkingOpen(!isThinkingOpen)}
+                    className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-obsidian-500 hover:text-obsidian-300 transition-colors mb-2"
+                 >
+                     <div className={`w-1.5 h-1.5 rounded-full ${message.isStreaming && !displayContent ? 'bg-amber-500 animate-pulse' : 'bg-obsidian-600'}`}></div>
+                     {message.isStreaming && !displayContent ? 'Thinking...' : 'Thought Process'}
+                     <Icon name="play" className={`w-2 h-2 transition-transform duration-300 ${isThinkingOpen ? 'rotate-90' : 'rotate-0'}`} />
+                 </button>
+                 
+                 {isThinkingOpen && (
+                     <div className="prose prose-invert max-w-none">
+                         <div className="text-xs font-mono text-obsidian-400 bg-obsidian-900/30 p-3 rounded leading-relaxed whitespace-pre-wrap animate-fade-in">
+                             {thoughtContent}
+                         </div>
+                     </div>
+                 )}
+             </div>
+        )}
+
         {/* Text Content */}
         <div className={`
           relative 
@@ -125,6 +156,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
           ${isUser ? 'text-obsidian-200 text-right' : 'text-obsidian-300 text-left markdown-body'}
         `}>
           <ReactMarkdown
+             remarkPlugins={[remarkMath]}
+             rehypePlugins={[rehypeKatex]}
              components={{
                  a: ({node, ...props}) => (
                      <a 
@@ -150,7 +183,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
                 }
              }}
           >
-              {message.content}
+              {displayContent || (message.isStreaming && thoughtContent ? '' : message.content)}
           </ReactMarkdown>
 
           {/* Grounding / Search Results */}
@@ -178,7 +211,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, userSetti
           )}
           
           {/* Actions (Only for Model) */}
-          {!isUser && !message.isStreaming && (
+          {!isUser && !message.isStreaming && displayContent && (
              <div className="absolute -bottom-12 left-0 pt-6 pb-2 pr-10 flex gap-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-75 z-10">
                 
                 {/* Copy Button */}

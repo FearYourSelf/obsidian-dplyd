@@ -18,6 +18,21 @@ const detectComplexity = (text: string): boolean => {
     return text.length > 150 || complexKeywords.some(kw => lower.includes(kw));
 };
 
+const SHARDS = [
+    { icon: 'code', label: 'Deconstruct Code', prompt: 'Analyze this code snippet for performance and security flaws:' },
+    { icon: 'brain', label: 'Concept Analysis', prompt: 'Explain the core concepts of [topic] using first principles:' },
+    { icon: 'pen', label: 'Strategic Plan', prompt: 'Create a comprehensive strategic plan for:' },
+    { icon: 'hat', label: 'Academic Proof', prompt: 'Provide a formal proof or academic explanation for:' },
+];
+
+const SLASH_COMMANDS = [
+    { cmd: '/reset', desc: 'Clear current chat' },
+    { cmd: '/think', desc: 'Toggle reasoning mode' },
+    { cmd: '/search', desc: 'Toggle web search' },
+    { cmd: '/image', desc: 'Generate images info' },
+    { cmd: '/archive', desc: 'Archive this chat' },
+];
+
 const App: React.FC = () => {
   // --- State ---
   const [userSettings, setUserSettings] = useState<UserSettings>(() => loadSettings());
@@ -50,6 +65,14 @@ const App: React.FC = () => {
   const [isSearchEnabled, setIsSearchEnabled] = useState(false);
   const [isStudyDropdownOpen, setIsStudyDropdownOpen] = useState(false);
   
+  // Slash Command State
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [slashFilter, setSlashFilter] = useState('');
+
+  // Drag and Drop State
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
+
   // Lightbox State
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   
@@ -95,6 +118,9 @@ const App: React.FC = () => {
         if (!target.closest('.study-dropdown') && !target.closest('.study-toggle')) {
             setIsStudyDropdownOpen(false);
         }
+        if (!target.closest('.slash-menu')) {
+            setSlashMenuOpen(false);
+        }
     };
     document.addEventListener('click', handleClickOutside);
 
@@ -103,6 +129,68 @@ const App: React.FC = () => {
         document.removeEventListener('keydown', handleKeyDown);
         document.removeEventListener('click', handleClickOutside);
     };
+  }, []);
+
+  // Global Drag and Drop
+  useEffect(() => {
+      const handleDragEnter = (e: DragEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dragCounter.current++;
+          if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
+            setIsDragging(true);
+          }
+      };
+      
+      const handleDragLeave = (e: DragEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dragCounter.current--;
+          if (dragCounter.current === 0) {
+             setIsDragging(false);
+          }
+      };
+
+      const handleDragOver = (e: DragEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+      };
+
+      const handleDrop = (e: DragEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragging(false);
+          dragCounter.current = 0;
+          
+          if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+             const files = Array.from(e.dataTransfer.files);
+             // Process only first for now or loop
+             files.forEach(file => {
+                 const reader = new FileReader();
+                 reader.onloadend = () => {
+                    setAttachments(prev => [...prev, {
+                      file,
+                      previewUrl: URL.createObjectURL(file),
+                      mimeType: file.type,
+                      base64: reader.result as string
+                    }]);
+                 };
+                 reader.readAsDataURL(file);
+             });
+          }
+      };
+
+      window.addEventListener('dragenter', handleDragEnter);
+      window.addEventListener('dragleave', handleDragLeave);
+      window.addEventListener('dragover', handleDragOver);
+      window.addEventListener('drop', handleDrop);
+
+      return () => {
+          window.removeEventListener('dragenter', handleDragEnter);
+          window.removeEventListener('dragleave', handleDragLeave);
+          window.removeEventListener('dragover', handleDragOver);
+          window.removeEventListener('drop', handleDrop);
+      };
   }, []);
 
   // Auto-resize textarea
@@ -129,6 +217,16 @@ const App: React.FC = () => {
         container.scrollTop = container.scrollHeight;
     }
   }, [chatState.messages]);
+
+  // Slash Command Detection
+  useEffect(() => {
+      if (input.startsWith('/')) {
+          setSlashMenuOpen(true);
+          setSlashFilter(input.substring(1).toLowerCase());
+      } else {
+          setSlashMenuOpen(false);
+      }
+  }, [input]);
 
   // Auto-save chat when messages change
   useEffect(() => {
@@ -193,6 +291,40 @@ const App: React.FC = () => {
   const handleToneChange = (newTone: string) => {
       const updated = { ...userSettings, tone: newTone };
       handleSettingsSave(updated);
+  };
+
+  const executeSlashCommand = (cmd: string) => {
+      setInput('');
+      setSlashMenuOpen(false);
+      
+      switch(cmd) {
+          case '/reset':
+              clearChat();
+              break;
+          case '/think':
+              toggleModel();
+              break;
+          case '/search':
+              setIsSearchEnabled(prev => !prev);
+              break;
+          case '/image':
+              setInput("How do I generate images with Umbrax?");
+              handleSendMessage();
+              break;
+          case '/archive':
+              if (chatState.currentChatId) {
+                  archiveChat(chatState.currentChatId);
+                  clearChat();
+                  setSavedChats(loadChats());
+              }
+              break;
+      }
+      inputRef.current?.focus();
+  };
+
+  const handleShardClick = (prompt: string) => {
+      setInput(prompt);
+      inputRef.current?.focus();
   };
 
   const handleStudyOption = (type: 'study' | 'homework' | 'explain' | 'quiz') => {
@@ -342,6 +474,12 @@ const App: React.FC = () => {
   const handleSendMessage = async () => {
     if ((!input.trim() && attachments.length === 0) || chatState.isLoading) return;
 
+    // Check for Slash command execution just in case
+    if (input.startsWith('/') && SLASH_COMMANDS.some(c => c.cmd === input.trim())) {
+        executeSlashCommand(input.trim());
+        return;
+    }
+
     autoScrollEnabledRef.current = true;
     scrollToBottom(true);
 
@@ -447,6 +585,19 @@ const App: React.FC = () => {
          <div className={`absolute inset-0 z-0 bg-gradient-radial opacity-90 animate-aurora pointer-events-none ${isUnhinged ? 'from-[#1a0000] via-[#050000] to-[#000000]' : 'from-obsidian-900 via-obsidian-950 to-obsidian-950'}`}></div>
       )}
 
+      {/* Drag and Drop Overlay */}
+      {isDragging && (
+          <div className="fixed inset-0 z-[100] bg-obsidian-950/90 backdrop-blur-sm flex items-center justify-center border-4 border-obsidian-500 m-4 rounded-3xl animate-scale-in">
+              <div className="text-center animate-pulse-slow">
+                  <div className="mx-auto w-24 h-24 mb-6 rounded-full border-2 border-obsidian-400 flex items-center justify-center">
+                      <Icon name="paperclip" className="w-10 h-10 text-obsidian-200" />
+                  </div>
+                  <h2 className="text-2xl font-light tracking-[0.5em] text-white">DROP TO ANALYZE</h2>
+                  <p className="mt-4 text-obsidian-400 font-mono text-sm uppercase">Obsidian Vision Ready</p>
+              </div>
+          </div>
+      )}
+
       {/* Header */}
       <header className={`fixed top-0 left-0 right-0 h-16 flex items-center justify-between px-4 sm:px-6 z-50 backdrop-blur-md border-b transition-colors duration-500 ${isUnhinged ? 'bg-[#050000]/90 border-red-900/20' : 'bg-gradient-to-b from-obsidian-950 to-obsidian-950/90 border-white/5'}`}>
         <div className="flex items-center gap-3 sm:gap-4">
@@ -513,15 +664,32 @@ const App: React.FC = () => {
           
           <div className="mt-auto flex flex-col">
               {chatState.messages.length === 0 && (
-                 <div className="flex flex-col items-center justify-center opacity-30 select-none pb-20 animate-fade-in-up py-20">
-                    <div className={`w-20 h-20 border rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(0,0,0,0.5)] ${isUnhinged ? 'border-red-900/50 bg-red-950/10' : 'border-obsidian-800'}`}>
-                        <Icon name="cpu" className={`w-6 h-6 ${isUnhinged ? 'text-red-600' : 'text-obsidian-600'}`} />
+                 <div className="flex flex-col items-center justify-center opacity-30 select-none pb-10 animate-fade-in-up py-10 w-full">
+                    <div className={`w-20 h-20 border rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(0,0,0,0.5)] transition-colors duration-500 ${isUnhinged ? 'border-red-900/50 bg-red-950/10' : 'border-obsidian-800 group hover:border-obsidian-600'}`}>
+                        <Icon name="cpu" className={`w-6 h-6 transition-colors duration-500 ${isUnhinged ? 'text-red-600' : 'text-obsidian-600 group-hover:text-white'}`} />
                     </div>
                     <p className="text-xs tracking-[0.3em] uppercase">
                         {isItalian ? 'System is Italian' : 'System Online'}
                     </p>
                     <p className="text-[10px] text-obsidian-600 mt-2 font-mono">NSD-CORE/70B • Ready</p>
-                    <p className="text-[9px] text-obsidian-700 mt-6 font-mono tracking-widest">CMD + K to Clear</p>
+                    
+                    {/* Obsidian Shards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-12 w-full max-w-xl px-4">
+                        {SHARDS.map((shard, i) => (
+                            <button 
+                                key={i}
+                                onClick={() => handleShardClick(shard.prompt)}
+                                className="flex items-center gap-3 p-4 bg-obsidian-900/50 border border-obsidian-800/50 rounded-lg hover:bg-obsidian-800 hover:border-obsidian-600 transition-all group text-left"
+                            >
+                                <div className="p-2 bg-obsidian-950 rounded-md text-obsidian-500 group-hover:text-white transition-colors">
+                                    <Icon name={shard.icon as any} className="w-4 h-4" />
+                                </div>
+                                <span className="text-xs text-obsidian-400 group-hover:text-white font-mono uppercase tracking-wider">{shard.label}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    <p className="text-[9px] text-obsidian-700 mt-8 font-mono tracking-widest">Type '/' for commands</p>
                  </div>
               )}
 
@@ -619,6 +787,30 @@ const App: React.FC = () => {
          
          <div className="max-w-3xl mx-auto animate-fade-in-up relative" style={{ animationDelay: '0.1s' }}>
              
+             {/* Slash Command Menu */}
+             {slashMenuOpen && (
+                 <div className="slash-menu absolute bottom-full left-0 mb-3 w-64 bg-obsidian-900 border border-obsidian-800 rounded-lg shadow-2xl overflow-hidden animate-fade-in-up z-50">
+                     <div className="p-2 bg-obsidian-950/50 border-b border-obsidian-800 text-[10px] font-mono uppercase text-obsidian-500">
+                         Commands
+                     </div>
+                     <div className="max-h-60 overflow-y-auto p-1">
+                         {SLASH_COMMANDS.filter(cmd => cmd.cmd.includes(slashFilter)).map(cmd => (
+                             <button 
+                                key={cmd.cmd}
+                                onClick={() => executeSlashCommand(cmd.cmd)}
+                                className="w-full text-left flex items-center justify-between p-2 rounded hover:bg-obsidian-800 transition-colors group"
+                             >
+                                 <span className="text-sm font-mono text-white">{cmd.cmd}</span>
+                                 <span className="text-xs text-obsidian-500 group-hover:text-obsidian-300">{cmd.desc}</span>
+                             </button>
+                         ))}
+                         {SLASH_COMMANDS.filter(cmd => cmd.cmd.includes(slashFilter)).length === 0 && (
+                             <div className="p-2 text-xs text-obsidian-600 text-center italic">No matching commands</div>
+                         )}
+                     </div>
+                 </div>
+             )}
+
              {/* Academics Dropdown */}
              {isStudyDropdownOpen && (
                  <div className="study-dropdown absolute bottom-full left-0 mb-3 w-64 bg-obsidian-900 border border-obsidian-800 rounded-lg shadow-2xl overflow-hidden animate-fade-in-up z-50">
