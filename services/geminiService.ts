@@ -231,20 +231,63 @@ export const streamChatResponse = async (
   }
   currentParts.push({ text: currentMessage });
 
-  const result = await chat.sendMessageStream({ message: currentParts });
+  try {
+      const result = await chat.sendMessageStream({ message: currentParts });
 
-  for await (const chunk of result) {
-    const c = chunk as any;
-    
-    // Handle Text
-    if (c.text) {
-      onChunk(c.text);
-    }
+      for await (const chunk of result) {
+        const c = chunk as any;
+        
+        // Handle Text
+        if (c.text) {
+          onChunk(c.text);
+        }
 
-    // Handle Grounding Metadata (Search Results)
-    if (c.candidates?.[0]?.groundingMetadata && onMetadata) {
-        onMetadata(c.candidates[0].groundingMetadata);
-    }
+        // Handle Grounding Metadata (Search Results)
+        if (c.candidates?.[0]?.groundingMetadata && onMetadata) {
+            onMetadata(c.candidates[0].groundingMetadata);
+        }
+      }
+  } catch (error: any) {
+      // --- FALLBACK LOGIC ---
+      // If we hit a Quota/Rate Limit error (429) AND we were using the heavy Reasoning model (Gemini 3 Pro),
+      // Fallback to the Balanced model (Flash) which generally has higher limits.
+      const isQuotaError = error.toString().includes('429') || error.toString().includes('Quota') || error.status === 429;
+      
+      if (isQuotaError && (activeModel === MODEL_MAPPING[ModelTier.REASONING] || hasVideo)) {
+          console.warn("Primary model quota exceeded. Engaging fallback protocol.");
+          
+          // Notify user in the stream
+          onChunk("\n\n> **SYSTEM NOTICE:** *Reasoning Engine (Gemini 3 Pro) capacity exceeded. Seamlessly rerouting request to High-Speed Grid (Flash)...*\n\n");
+
+          const fallbackModel = MODEL_MAPPING[ModelTier.BALANCED];
+          
+          // Strip thinking config for Flash (incompatible)
+          const fallbackConfig = { ...config };
+          delete fallbackConfig.thinkingConfig;
+          
+          // Rebuild system prompt without "Reasoning Protocol" instructions
+          fallbackConfig.systemInstruction = buildSystemPrompt(settings, pastHistory, pastContext, false);
+
+          const fallbackChat = ai.chats.create({
+              model: fallbackModel,
+              config: fallbackConfig,
+              history: historyParts
+          });
+
+          // Retry the same message
+          const fallbackResult = await fallbackChat.sendMessageStream({ message: currentParts });
+          
+          for await (const chunk of fallbackResult) {
+             const c = chunk as any;
+             if (c.text) onChunk(c.text);
+             if (c.candidates?.[0]?.groundingMetadata && onMetadata) {
+                 onMetadata(c.candidates[0].groundingMetadata);
+             }
+          }
+      } else {
+          // If it's not a quota error or we are already on the fallback model, throw it.
+          throw error;
+      }
   }
 };
 
