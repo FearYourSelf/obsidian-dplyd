@@ -18,13 +18,6 @@ const detectComplexity = (text: string): boolean => {
     return text.length > 150 || complexKeywords.some(kw => lower.includes(kw));
 };
 
-const SHARDS = [
-    { icon: 'code', label: 'Deconstruct Code', prompt: 'Analyze this code snippet for performance and security flaws:' },
-    { icon: 'brain', label: 'Concept Analysis', prompt: 'Explain the core concepts of [topic] using first principles:' },
-    { icon: 'pen', label: 'Strategic Plan', prompt: 'Create a comprehensive strategic plan for:' },
-    { icon: 'hat', label: 'Academic Proof', prompt: 'Provide a formal proof or academic explanation for:' },
-];
-
 const SLASH_COMMANDS = [
     { cmd: '/reset', desc: 'Clear current chat' },
     { cmd: '/think', desc: 'Toggle reasoning mode' },
@@ -573,6 +566,31 @@ const App: React.FC = () => {
   
   const isUnhinged = userSettings.tone === 'Unhinged';
   const isItalian = userSettings.accent === 'italian';
+  
+  const getShards = () => {
+    if (isItalian) {
+        return [
+            { icon: 'pen', label: 'Cucina Autentica', prompt: 'Give me an authentic, traditional Italian recipe for:' },
+            { icon: 'hat', label: 'Renaissance Art', prompt: 'Critique this art piece (or concept) like a passionate Italian historian:' },
+            { icon: 'mic', label: 'Gesture Guide', prompt: 'Explain the meaning and appropriate usage of this Italian hand gesture:' },
+            { icon: 'globe', label: 'Travel Secret', prompt: 'Tell me a hidden travel secret about Italy near:' },
+        ];
+    }
+    if (isUnhinged) {
+        return [
+            { icon: 'zap', label: 'Roast My Life', prompt: 'Roast my life choices based on this:' },
+            { icon: 'brain', label: 'Existential Dread', prompt: 'Give me a detailed existential crisis about:' },
+            { icon: 'code', label: 'Destroy My Code', prompt: 'Look at this code and tell me why it belongs in the trash:' },
+            { icon: 'stop-circle', label: 'Chaos Mode', prompt: 'Explain this concept but make it sound like a dark conspiracy:' },
+        ];
+    }
+    return [
+        { icon: 'code', label: 'Deconstruct Code', prompt: 'Analyze this code snippet for performance and security flaws:' },
+        { icon: 'brain', label: 'Concept Analysis', prompt: 'Explain the core concepts of [topic] using first principles:' },
+        { icon: 'pen', label: 'Strategic Plan', prompt: 'Create a comprehensive strategic plan for:' },
+        { icon: 'hat', label: 'Academic Proof', prompt: 'Provide a formal proof or academic explanation for:' },
+    ];
+  };
 
   return (
     <div className={`flex flex-col h-screen font-sans overflow-hidden selection:bg-obsidian-700 selection:text-white relative transition-colors duration-1000 ${isUnhinged ? 'bg-[#050000]' : 'bg-obsidian-950'} text-obsidian-200`}>
@@ -675,7 +693,7 @@ const App: React.FC = () => {
                     
                     {/* Obsidian Shards */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-12 w-full max-w-xl px-4">
-                        {SHARDS.map((shard, i) => (
+                        {getShards().map((shard, i) => (
                             <button 
                                 key={i}
                                 onClick={() => handleShardClick(shard.prompt)}
